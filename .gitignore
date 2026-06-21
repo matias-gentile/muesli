@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Datos generados localmente
+recordings/
+notes/
+notes.db
+*.wav
+
+# Caché de modelos de Whisper
+models/

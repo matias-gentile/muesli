@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Notas de reuniones</title>
+<style>
+  :root {
+    --bg: #14110f;
+    --panel: #1d1916;
+    --panel-2: #262019;
+    --line: #352c24;
+    --text: #ece5dc;
+    --muted: #9c8f80;
+    --accent: #e8763a;
+    --accent-soft: #3a2519;
+    --ok: #6cb87a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+  /* Sidebar */
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 20px 16px;
+    overflow-y: auto;
+  }
+  aside h2 {
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .note-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .note-item:hover { background: var(--panel-2); }
+  .note-item.active { background: var(--accent-soft); border-color: var(--accent); }
+  .note-item .t { font-size: 14px; font-weight: 600; }
+  .note-item .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  /* Main */
+  main { padding: 28px 36px; overflow-y: auto; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); }
+  .brand h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  input.title {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 600;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+  input.title:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  button.rec {
+    background: var(--accent);
+    color: #1a1108;
+    border: none;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 12px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+  button.rec.recording { background: #c43d3d; color: #fff; }
+  button.rec:disabled { opacity: .5; cursor: default; }
+  .pulse { width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: p 1.1s infinite; }
+  @keyframes p { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 15px; }
+  textarea {
+    width: 100%;
+    min-height: 150px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    font-family: inherit;
+  }
+  .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 8px; }
+  .status { font-size: 14px; color: var(--muted); margin: 14px 0; min-height: 20px; }
+  .status.work { color: var(--accent); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: 18px;
+    line-height: 1.6;
+  }
+  .card h2 { font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin: 20px 0 8px; }
+  .card h2:first-child { margin-top: 0; }
+  .card ul { margin: 6px 0; padding-left: 20px; }
+  .card li { margin: 4px 0; }
+  .card .check { list-style: none; margin-left: -20px; }
+  .card .check::before { content: "☐ "; color: var(--accent); }
+  details { margin-top: 16px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .transcript { white-space: pre-wrap; color: var(--muted); font-size: 13px; margin-top: 10px; line-height: 1.55; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <aside>
+    <h2>Reuniones</h2>
+    <div id="list"></div>
+  </aside>
+
+  <main>
+    <div class="brand"><span class="dot"></span><h1>Notas de reuniones</h1></div>
+
+    <input id="title" class="title" placeholder="Título de la reunión…" />
+
+    <div class="row">
+      <button id="recBtn" class="rec" onclick="toggle()">
+        <span id="recLabel">● Grabar</span>
+      </button>
+      <span id="timer" class="timer"></span>
+    </div>
+
+    <div class="label">Mis notas (escribe lo que te importa mientras hablan)</div>
+    <textarea id="notes" placeholder="• decisión sobre precios&#10;• pendiente: enviar propuesta&#10;• preguntar por el deadline…"></textarea>
+
+    <div id="status" class="status"></div>
+
+    <div id="result"></div>
+  </main>
+
+<script>
+let recording = false;
+let t0 = null, timerId = null;
+let activeId = null;
+
+function fmt(s) {
+  const m = Math.floor(s / 60), ss = s % 60;
+  return `${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
+}
+function tick() {
+  const s = Math.floor((Date.now() - t0) / 1000);
+  document.getElementById("timer").textContent = fmt(s);
+}
+
+async function toggle() {
+  if (!recording) await start();
+  else await stop();
+}
+
+async function start() {
+  setStatus("Iniciando grabación…", true);
+  const r = await fetch("/api/start", { method: "POST" });
+  const data = await r.json();
+  if (data.error) { setStatus("⚠️ " + data.error); return; }
+  recording = true;
+  t0 = Date.now();
+  timerId = setInterval(tick, 1000); tick();
+  const btn = document.getElementById("recBtn");
+  btn.classList.add("recording");
+  document.getElementById("recLabel").innerHTML =
+    '<span class="pulse"></span> Detener y resumir';
+  setStatus("Grabando… mantén el output del sistema en el Multi-Output Device.");
+}
+
+async function stop() {
+  recording = false;
+  clearInterval(timerId);
+  document.getElementById("recBtn").classList.remove("recording");
+  document.getElementById("recBtn").disabled = true;
+  document.getElementById("recLabel").textContent = "Procesando…";
+  setStatus("Transcribiendo y resumiendo con Claude… (puede tardar un poco)", true);
+
+  const body = {
+    title: document.getElementById("title").value,
+    notes: document.getElementById("notes").value,
+  };
+  const r = await fetch("/api/stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+
+  document.getElementById("recBtn").disabled = false;
+  document.getElementById("recLabel").textContent = "● Grabar";
+  document.getElementById("timer").textContent = "";
+
+  if (data.error) { setStatus("⚠️ " + data.error); return; }
+  setStatus("✓ Listo y guardado.");
+  render(data.summary, data.transcript);
+  await loadList();
+  document.getElementById("title").value = "";
+  document.getElementById("notes").value = "";
+}
+
+function setStatus(msg, working = false) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status" + (working ? " work" : "");
+}
+
+// Mini-render de Markdown (encabezados ##, listas, checkboxes, **negrita**)
+function mdToHtml(md) {
+  const lines = md.split("\n");
+  let html = "", inList = false;
+  const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
+  for (let raw of lines) {
+    const line = raw.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    if (/^##\s+/.test(line)) { closeList(); html += "<h2>" + line.replace(/^##\s+/, "") + "</h2>"; }
+    else if (/^- \[ \]\s+/.test(line)) { if (!inList) { html += '<ul>'; inList = true; } html += '<li class="check">' + line.replace(/^- \[ \]\s+/, "") + "</li>"; }
+    else if (/^[-*]\s+/.test(line)) { if (!inList) { html += "<ul>"; inList = true; } html += "<li>" + line.replace(/^[-*]\s+/, "") + "</li>"; }
+    else if (line.trim() === "") { closeList(); }
+    else { closeList(); html += "<p>" + line + "</p>"; }
+  }
+  closeList();
+  return html;
+}
+
+function render(summary, transcript) {
+  const html = `
+    <div class="card">${mdToHtml(summary)}</div>
+    <details><summary>Ver transcripción completa</summary>
+      <div class="transcript">${(transcript || "").replace(/</g, "&lt;")}</div>
+    </details>`;
+  document.getElementById("result").innerHTML = html;
+}
+
+async function loadList() {
+  const r = await fetch("/api/notes");
+  const items = await r.json();
+  const list = document.getElementById("list");
+  if (!items.length) { list.innerHTML = '<div class="hint">Aún no hay reuniones.</div>'; return; }
+  list.innerHTML = items.map(n => `
+    <div class="note-item ${n.id === activeId ? "active" : ""}" onclick="openNote(${n.id})">
+      <div class="t">${(n.title || "Reunión").replace(/</g, "&lt;")}</div>
+      <div class="d">${new Date(n.created_at).toLocaleString("es")}</div>
+    </div>`).join("");
+}
+
+async function openNote(id) {
+  activeId = id;
+  const r = await fetch("/api/notes/" + id);
+  const n = await r.json();
+  setStatus("");
+  render(n.summary, n.transcript);
+  await loadList();
+}
+
+loadList();
+</script>
+</body>
+</html>
