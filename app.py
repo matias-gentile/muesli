@@ -5,7 +5,7 @@ from flask import Flask, jsonify, render_template, request
 import storage
 from audio_capture import Recorder
 from config import AUDIO_DEVICE_NAME
-from summarize import summarize
+from summarize import list_templates, summarize
 from transcribe import transcribe
 
 app = Flask(__name__)
@@ -25,6 +25,12 @@ def devices():
         if d["max_input_channels"] > 0
     ]
     return jsonify({"configured": AUDIO_DEVICE_NAME, "devices": out})
+
+
+@app.route("/api/templates")
+def templates():
+    """Tipos de grabación disponibles para el selector del frontend."""
+    return jsonify(list_templates())
 
 
 @app.route("/api/start", methods=["POST"])
@@ -49,11 +55,13 @@ def stop():
     data = request.get_json(silent=True) or {}
     title = data.get("title", "")
     manual_notes = data.get("notes", "")
+    context_type = data.get("context_type", "reunion")
+    context = data.get("context", "")
 
     wav_path = recorder.stop()
     try:
         transcript = transcribe(wav_path)
-        summary = summarize(transcript, manual_notes, title)
+        summary = summarize(transcript, manual_notes, title, context_type, context)
     except Exception as e:
         return jsonify({"error": f"fallo procesando: {e}"}), 500
 

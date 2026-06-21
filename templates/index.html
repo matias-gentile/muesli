@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Notas de reuniones</title>
+<title>Muesli</title>
 <style>
   :root {
     --bg: #14110f;
@@ -99,6 +99,19 @@
     resize: vertical;
     font-family: inherit;
   }
+  .meta { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .select, .ctx {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 11px 13px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .select { min-width: 170px; cursor: pointer; }
+  .ctx { flex: 1; min-width: 220px; }
+  .select:focus, .ctx:focus { outline: none; border-color: var(--accent); }
   .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 8px; }
   .status { font-size: 14px; color: var(--muted); margin: 14px 0; min-height: 20px; }
   .status.work { color: var(--accent); }
@@ -125,14 +138,19 @@
 </head>
 <body>
   <aside>
-    <h2>Reuniones</h2>
+    <h2>Grabaciones</h2>
     <div id="list"></div>
   </aside>
 
   <main>
-    <div class="brand"><span class="dot"></span><h1>Notas de reuniones</h1></div>
+    <div class="brand"><span class="dot"></span><h1>Muesli</h1></div>
 
-    <input id="title" class="title" placeholder="Título de la reunión…" />
+    <input id="title" class="title" placeholder="Título…" />
+
+    <div class="meta">
+      <select id="ctype" class="select" title="Tipo de grabación"></select>
+      <input id="context" class="ctx" placeholder="Contexto: tema, asistentes, materia… (opcional)" />
+    </div>
 
     <div class="row">
       <button id="recBtn" class="rec" onclick="toggle()">
@@ -194,6 +212,8 @@ async function stop() {
   const body = {
     title: document.getElementById("title").value,
     notes: document.getElementById("notes").value,
+    context_type: document.getElementById("ctype").value,
+    context: document.getElementById("context").value,
   };
   const r = await fetch("/api/stop", {
     method: "POST",
@@ -212,6 +232,7 @@ async function stop() {
   await loadList();
   document.getElementById("title").value = "";
   document.getElementById("notes").value = "";
+  document.getElementById("context").value = "";
 }
 
 function setStatus(msg, working = false) {
@@ -246,14 +267,21 @@ function render(summary, transcript) {
   document.getElementById("result").innerHTML = html;
 }
 
+async function loadTemplates() {
+  const r = await fetch("/api/templates");
+  const tpls = await r.json();
+  document.getElementById("ctype").innerHTML =
+    tpls.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
+}
+
 async function loadList() {
   const r = await fetch("/api/notes");
   const items = await r.json();
   const list = document.getElementById("list");
-  if (!items.length) { list.innerHTML = '<div class="hint">Aún no hay reuniones.</div>'; return; }
+  if (!items.length) { list.innerHTML = '<div class="hint">Aún no hay grabaciones.</div>'; return; }
   list.innerHTML = items.map(n => `
     <div class="note-item ${n.id === activeId ? "active" : ""}" onclick="openNote(${n.id})">
-      <div class="t">${(n.title || "Reunión").replace(/</g, "&lt;")}</div>
+      <div class="t">${(n.title || "Sin título").replace(/</g, "&lt;")}</div>
       <div class="d">${new Date(n.created_at).toLocaleString("es")}</div>
     </div>`).join("");
 }
@@ -267,6 +295,7 @@ async function openNote(id) {
   await loadList();
 }
 
+loadTemplates();
 loadList();
 </script>
 </body>
