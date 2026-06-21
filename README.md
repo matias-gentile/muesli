@@ -55,8 +55,19 @@ interno por el que pasa el sonido.
 ```bash
 brew install blackhole-2ch
 ```
-(o descargalo de https://existential.audio/blackhole/). Si no aparece el
-dispositivo después de instalar, reiniciá el Mac.
+Te va a pedir tu contraseña (instala un componente de sistema). Si `brew` falla o
+no lo usás, descargá el `.pkg` de **BlackHole2ch** directo desde GitHub releases
+(sin tener que dar tu email): https://github.com/ExistentialAudio/BlackHole/releases
+
+**Importante:** después de instalar, **reiniciá el Mac**. macOS carga el driver de
+audio recién al reiniciar, y es la causa #1 de que "BlackHole no aparezca" en
+Configuración de Audio MIDI. Si no querés reiniciar, podés refrescar el servicio
+de audio con:
+```bash
+sudo killall coreaudiod
+```
+Si al instalar saltó un aviso de *"software del sistema bloqueado"*, andá a
+*Ajustes del Sistema → Privacidad y seguridad*, dale **Permitir** y reiniciá.
 
 ### 1.2 Abrir "Configuración de Audio MIDI"
 Spotlight (⌘+Espacio) → escribí **Configuración de Audio MIDI** (Audio MIDI Setup).
@@ -144,6 +155,15 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 ---
 
 ## Solución de problemas
+
+**BlackHole no aparece en Configuración de Audio MIDI**
+Casi siempre es porque falta reiniciar después de instalarlo (macOS carga el
+driver al reiniciar) o porque no llegó a instalarse. Verificá con
+`brew list | grep blackhole`; si no devuelve nada, instalalo (Paso 1.1). Después
+**reiniciá el Mac** o corré `sudo killall coreaudiod`. Si hubo un aviso de
+software bloqueado, permitilo en *Ajustes del Sistema → Privacidad y seguridad*.
+Ojo: *ZoomAudioDevice* no es BlackHole; es el driver de Zoom y no sirve como
+loopback general.
 
 **"No encontré un dispositivo de entrada que contenga 'Aggregate'"**
 Corré `python audio_capture.py` para ver los nombres reales y poné el substring
