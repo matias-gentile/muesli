@@ -148,6 +148,11 @@ def list_templates():
     return [{"value": k, "label": v["label"]} for k, v in TEMPLATES.items()]
 
 
+def type_label(context_type):
+    """Devuelve la etiqueta legible de un tipo (p. ej. 'reunion' -> 'Reunión')."""
+    return TEMPLATES.get(context_type, TEMPLATES[DEFAULT_TYPE])["label"]
+
+
 def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, context=""):
     template = TEMPLATES.get(context_type, TEMPLATES[DEFAULT_TYPE])
     system = (

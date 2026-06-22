@@ -133,6 +133,18 @@
   summary { cursor: pointer; color: var(--muted); font-size: 14px; }
   .transcript { white-space: pre-wrap; color: var(--muted); font-size: 13px; margin-top: 10px; line-height: 1.55; }
   .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .notion-link {
+    display: inline-block;
+    margin: 16px 0 0;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    padding: 8px 14px;
+    border-radius: 8px;
+  }
+  .notion-link:hover { border-color: var(--accent); }
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
 </style>
 </head>
@@ -228,7 +240,7 @@ async function stop() {
 
   if (data.error) { setStatus("⚠️ " + data.error); return; }
   setStatus("✓ Listo y guardado.");
-  render(data.summary, data.transcript);
+  render(data.summary, data.transcript, data.notion_url);
   await loadList();
   document.getElementById("title").value = "";
   document.getElementById("notes").value = "";
@@ -258,8 +270,12 @@ function mdToHtml(md) {
   return html;
 }
 
-function render(summary, transcript) {
+function render(summary, transcript, notionUrl) {
+  const notion = notionUrl
+    ? `<a class="notion-link" href="${notionUrl}" target="_blank" rel="noopener">📄 Abrir en Notion ↗</a>`
+    : "";
   const html = `
+    ${notion}
     <div class="card">${mdToHtml(summary)}</div>
     <details><summary>Ver transcripción completa</summary>
       <div class="transcript">${(transcript || "").replace(/</g, "&lt;")}</div>

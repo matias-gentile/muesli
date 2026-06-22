@@ -5,9 +5,10 @@ import sounddevice as sd
 from flask import Flask, jsonify, render_template, request
 
 import storage
+import notion_sync
 from audio_capture import Recorder
 from config import AUDIO_DEVICE_NAME
-from summarize import list_templates, summarize
+from summarize import list_templates, summarize, type_label
 from transcribe import transcribe
 
 app = Flask(__name__)
@@ -68,8 +69,16 @@ def stop():
         return jsonify({"error": f"fallo procesando: {e}"}), 500
 
     note = storage.save_note(title, transcript, summary, manual_notes)
-    return jsonify({"status": "done", "note": note,
-                    "transcript": transcript, "summary": summary})
+
+    # Sincronización opcional con Notion (no rompe el guardado local si falla).
+    notion_url = None
+    try:
+        notion_url = notion_sync.sync(title, summary, type_label(context_type), note["created_at"])
+    except Exception as e:
+        print(f"[notion] no se pudo sincronizar: {e}")
+
+    return jsonify({"status": "done", "note": note, "transcript": transcript,
+                    "summary": summary, "notion_url": notion_url})
 
 
 @app.route("/api/notes")

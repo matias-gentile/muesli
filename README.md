@@ -151,6 +151,37 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 | `CLAUDE_MODEL` | `claude-sonnet-4-6` (recomendado), `claude-opus-4-8` (+calidad), `claude-haiku-4-5-20251001` (+barato) |
 | `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` (más grande = más preciso y lento) |
 | `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
+| `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
+| `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
+
+---
+
+## Integración con Notion (opcional)
+
+Si la activás, cada grabación se crea como una **página en una base de datos de
+Notion**, con el resumen formateado (encabezados, viñetas y checkboxes), más el
+tipo y la fecha. Si no la configurás, la app funciona igual con los `.md` locales.
+
+1. **Creá una integración** en https://www.notion.so/my-integrations
+   (tipo *Internal*) y copiá el **Internal Integration Token**.
+2. **Creá una base de datos** en Notion (página nueva → `/database`). Solo necesita
+   la propiedad de **título**. Opcionalmente agregá:
+   - **Tipo** (tipo *Select*) → la app la completa con el tipo de grabación.
+   - **Fecha** (tipo *Date*) → la app la completa con la fecha.
+
+   Las propiedades opcionales solo se llenan si existen con ese nombre exacto.
+3. **Compartí la base con la integración**: en la base, botón `•••` → *Conexiones*
+   (Connections) → elegí tu integración. (Sin este paso, la API devuelve 404.)
+4. **Conseguí el ID de la base**: está en su URL —
+   `notion.so/<workspace>/<DATABASE_ID>?v=...` (los 32 caracteres antes del `?`).
+5. **Poné las variables** en `.env`:
+   ```
+   NOTION_API_KEY=ntn_...
+   NOTION_DATABASE_ID=...
+   ```
+
+Al detener una grabación vas a ver un botón **"Abrir en Notion"** con el link
+directo a la página creada.
 
 ---
 
@@ -193,12 +224,22 @@ Revisá `ANTHROPIC_API_KEY` en `.env`, que la venv esté activada y que
 Hay otra instancia corriendo. Cerrala o cambiá el puerto en `app.py`
 (`app.run(..., port=XXXX)`).
 
+**Notion: error 404 / "object not found"**
+La base no está compartida con la integración. Abrí la base → `•••` → *Conexiones*
+y agregá tu integración. Verificá también que `NOTION_DATABASE_ID` sea el de la
+base (no el de una página suelta).
+
+**Notion: la página se crea pero sin Tipo/Fecha**
+Esas propiedades solo se llenan si existen en la base con el nombre exacto
+**Tipo** (Select) y **Fecha** (Date). El resumen siempre se escribe igual.
+
 ---
 
 ## Privacidad
 El audio se procesa **en local** con Whisper; no se sube a ningún lado. Solo el
-texto (transcripción + tus notas) va a la API de Claude para el resumen. Avisá a
-los participantes que estás tomando notas con asistencia de IA.
+texto (transcripción + tus notas) va a la API de Claude para el resumen, y —si
+activás la integración— el resumen se envía a tu Notion. Avisá a los
+participantes que estás tomando notas con asistencia de IA.
 
 ---
 

@@ -5,3 +5,4 @@ soundfile>=0.12.1
 numpy>=1.24
 flask>=3.0
 python-dotenv>=1.0
+notion-client>=2.2.1   # opcional: integración con Notion
