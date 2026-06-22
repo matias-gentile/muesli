@@ -13,9 +13,10 @@ import sounddevice as sd
 from flask import Flask, Response, jsonify, render_template, request
 
 import config
+import notion_sync
 import storage
 import transcribe
-from audio_capture import ChunkedRecorder, record_test
+from audio_capture import ChunkedRecorder, find_input_device, record_test
 from config import RECORDINGS_DIR
 from session import Session
 from summarize import list_templates, summarize, type_label
@@ -125,10 +126,40 @@ def level():
     live = session.live_state() if session is not None else {"partial": "", "done_chunks": 0}
     return jsonify({
         "recording": rec,
+        "paused": bool(recorder is not None and recorder.paused) if rec else False,
         "level": float(recorder.level) if rec else 0.0,
         "peak": float(recorder.peak) if rec else 0.0,
         "partial": live["partial"],
         "done_chunks": live["done_chunks"],
+    })
+
+
+@app.route("/api/pause", methods=["POST"])
+def pause():
+    if recorder is None or not recorder.recording:
+        return jsonify({"error": "no se está grabando"}), 400
+    recorder.pause()
+    return jsonify({"status": "paused"})
+
+
+@app.route("/api/resume", methods=["POST"])
+def resume():
+    if recorder is None or not recorder.recording:
+        return jsonify({"error": "no se está grabando"}), 400
+    recorder.resume()
+    return jsonify({"status": "recording"})
+
+
+@app.route("/api/health")
+def health():
+    names = [d["name"].lower() for d in sd.query_devices()]
+    dev_name = config.get("AUDIO_DEVICE_NAME")
+    return jsonify({
+        "blackhole": any("blackhole" in n for n in names),
+        "device": {"ok": find_input_device(dev_name) is not None, "name": dev_name},
+        "api_key": bool(config.get("ANTHROPIC_API_KEY")),
+        "notion": notion_sync.is_enabled(),
+        "has_notes": len(storage.list_notes()) > 0,
     })
 
 

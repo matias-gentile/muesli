@@ -157,6 +157,42 @@
   .test-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   .test-hint{font-size:12px; color:var(--text-faint); margin-top:-4px;}
   .test-result{font-size:13px; font-weight:600; min-height:18px;}
+  .pause-btn{
+    flex-shrink:0; padding:5px 11px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim);
+    font-size:12px; font-weight:600; transition:background .12s ease;
+  }
+  .pause-btn:hover{background:var(--surface-3);}
+  .pause-btn.paused{background:var(--accent); color:#fff; border-color:var(--accent-text);}
+  .kbd-hint{font-size:11px; color:var(--text-faint); margin-top:10px;}
+  .kbd-hint kbd{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:5px;
+    padding:1px 5px; font-family:var(--font-ui); font-size:10px; color:var(--text-dim);
+  }
+  .setup-banner{
+    position:relative; margin:0 0 18px; padding:16px 18px; border-radius:14px;
+    background:var(--accent-glow); border:1px solid var(--accent);
+  }
+  .banner-x{
+    position:absolute; top:10px; right:12px; border:none; background:transparent;
+    cursor:pointer; color:var(--text-faint); font-size:14px;
+  }
+  .banner-x:hover{color:var(--text);}
+  .setup-title{font-family:var(--font-display); font-size:16px; font-weight:600; margin-bottom:11px; padding-right:20px;}
+  .checklist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px;}
+  .checklist li{display:flex; gap:9px; align-items:flex-start;}
+  .chk{
+    flex-shrink:0; width:18px; height:18px; border-radius:50%; margin-top:1px;
+    display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+  }
+  .chk.ok{background:rgba(46,158,84,.2); color:var(--ok);}
+  .chk.no{background:var(--surface-3); color:var(--text-faint);}
+  .chk-label{font-size:14px; font-weight:500;}
+  .chk-hint{font-size:12px; color:var(--text-dim); margin-top:2px;}
+  .setup-actions{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  #settingsHealth:not(:empty){
+    margin-bottom:4px; padding-bottom:14px; border-bottom:1px solid var(--border-soft);
+  }
   .recover-item{
     display:flex; align-items:center; gap:8px; padding:9px 10px; margin-top:4px;
     border-radius:10px; border:1px dashed var(--border); background:var(--surface);
@@ -383,6 +419,7 @@
   </aside>
 
   <main>
+    <div id="setupBanner" class="setup-banner" style="display:none"></div>
     <input id="title" class="title" placeholder="Título de la grabación…" />
 
     <div class="meta">
@@ -400,6 +437,7 @@
         <button type="button" class="seg-btn" data-mode="output">Solo salida</button>
       </div>
     </div>
+    <div class="kbd-hint"><kbd>espacio</kbd> grabar/detener · <kbd>/</kbd> buscar</div>
 
     <div class="label">Mis notas</div>
     <textarea id="notes" placeholder="Anotá lo que te importa mientras hablan…&#10;• decisión sobre precios&#10;• pendiente: enviar propuesta"></textarea>
@@ -409,6 +447,7 @@
         <span class="meter-label">Audio</span>
         <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
         <span id="signalPill" class="signal-pill idle">esperando señal…</span>
+        <button id="pauseBtn" class="pause-btn" onclick="togglePause()">⏸ Pausar</button>
       </div>
       <div id="liveTranscript" class="live-transcript">
         <span class="lt-empty">La transcripción va apareciendo a medida que se completan los segmentos…</span>
@@ -426,6 +465,7 @@
         <button class="modal-x" onclick="closeSettings()">✕</button>
       </div>
       <div class="modal-body">
+        <div id="settingsHealth"></div>
         <label class="fld">
           <span>Dispositivo de audio — Salida + micrófono</span>
           <select id="setDevFull"></select>
@@ -486,6 +526,8 @@ let levelTimer = null, lastPartialLen = -1;
 let curSummary = "";  // resumen crudo de la nota abierta (para editar)
 let allNotes = [], templateLabels = {};  // cache de la lista + value->label de tipos
 let deviceList = [];  // dispositivos de entrada (para el panel de Configuración)
+let paused = false, pausedMs = 0, pauseStart = 0;  // estado de pausa
+let bannerDismissed = false;  // checklist de bienvenida ocultado en esta sesión
 
 document.querySelectorAll("#audioMode .seg-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -503,8 +545,28 @@ function fmt(s) {
   return `${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
 }
 function tick() {
-  const s = Math.floor((Date.now() - t0) / 1000);
-  document.getElementById("timer").textContent = fmt(s);
+  const extra = paused ? (Date.now() - pauseStart) : 0;
+  const s = Math.floor((Date.now() - t0 - pausedMs - extra) / 1000);
+  document.getElementById("timer").textContent = fmt(Math.max(0, s)) + (paused ? " ⏸" : "");
+}
+
+async function togglePause() {
+  if (!recording) return;
+  if (!paused) {
+    try { await fetch("/api/pause", { method: "POST" }); } catch (e) { return; }
+    paused = true; pauseStart = Date.now();
+  } else {
+    try { await fetch("/api/resume", { method: "POST" }); } catch (e) { return; }
+    paused = false; pausedMs += Date.now() - pauseStart;
+  }
+  updatePauseBtn();
+}
+
+function updatePauseBtn() {
+  const b = document.getElementById("pauseBtn");
+  if (!b) return;
+  b.classList.toggle("paused", paused);
+  b.textContent = paused ? "▶ Reanudar" : "⏸ Pausar";
 }
 
 function startLiveMeter() {
@@ -529,6 +591,12 @@ async function pollLevel() {
   let d;
   try { d = await (await fetch("/api/level")).json(); } catch (e) { return; }
   if (!d.recording) return;
+  if (paused || d.paused) {
+    document.getElementById("meterFill").style.width = "0%";
+    const pill = document.getElementById("signalPill");
+    pill.className = "signal-pill idle"; pill.textContent = "⏸ En pausa";
+    return;
+  }
   // medidor (raíz cuadrada para realzar niveles bajos de voz)
   const pct = Math.min(100, Math.round(Math.sqrt(Math.max(0, d.level)) * 100));
   document.getElementById("meterFill").style.width = pct + "%";
@@ -561,6 +629,8 @@ async function start() {
   if (data.error) { setStatus("⚠️ " + data.error); return; }
   recording = true;
   setModeEnabled(false);
+  paused = false; pausedMs = 0; pauseStart = 0;
+  updatePauseBtn();
   t0 = Date.now();
   timerId = setInterval(tick, 1000); tick();
   startLiveMeter();
@@ -622,6 +692,7 @@ async function pollStatus() {
     });
     await loadList();
     await loadRecoverable();
+    loadHealth();
     clearComposer();
     return;
   } else if (s.status === "error") {
@@ -636,6 +707,7 @@ async function pollStatus() {
 
 function finishStop() {
   stopLiveMeter();
+  paused = false;
   document.getElementById("recBtn").disabled = false;
   document.getElementById("recLabel").textContent = "● Grabar";
   document.getElementById("timer").textContent = "";
@@ -940,6 +1012,7 @@ async function openSettings() {
   document.getElementById("setNotionKey").placeholder =
     s.NOTION_API_KEY_set ? "•••••• configurado — vacío = no cambiar" : "dejá vacío para no cambiar";
   document.getElementById("setNotionDb").value = s.NOTION_DATABASE_ID || "";
+  loadHealth();
 }
 
 function fillDeviceSelect(id, current) {
@@ -971,6 +1044,7 @@ async function saveSettings() {
     });
     closeSettings();
     setStatus("✓ Configuración guardada.");
+    loadHealth();
   } catch (e) { setStatus("⚠️ No se pudo guardar la configuración."); }
 }
 
@@ -996,9 +1070,62 @@ async function testAudio(mode) {
   } catch (e) { el.style.color = "var(--rec)"; el.textContent = "⚠ Error al probar el audio."; }
 }
 
+async function loadHealth() {
+  let h;
+  try { h = await (await fetch("/api/health")).json(); } catch (e) { return; }
+  const banner = document.getElementById("setupBanner");
+  const critical = !h.api_key || !h.device.ok || !h.blackhole;
+  if (bannerDismissed || (!critical && h.has_notes)) {
+    banner.style.display = "none";
+  } else {
+    banner.style.display = "";
+    banner.innerHTML = setupHtml(h, true);
+  }
+  const sh = document.getElementById("settingsHealth");
+  if (sh) sh.innerHTML = setupHtml(h, false);
+}
+
+function dismissBanner() {
+  bannerDismissed = true;
+  document.getElementById("setupBanner").style.display = "none";
+}
+
+function checkItem(ok, label, hint, optional) {
+  const icon = ok ? '<span class="chk ok">✓</span>' : '<span class="chk no">○</span>';
+  const opt = (optional && !ok) ? ' <span style="color:var(--text-faint)">(opcional)</span>' : '';
+  const hintHtml = (!ok && hint) ? `<div class="chk-hint">${hint}</div>` : "";
+  return `<li>${icon}<div><div class="chk-label">${label}${opt}</div>${hintHtml}</div></li>`;
+}
+
+function setupHtml(h, withDismiss) {
+  const title = h.has_notes ? "Estado del setup" : "¡Bienvenido a Muesli! Configurá esto para empezar";
+  return `
+    ${withDismiss ? '<button class="banner-x" onclick="dismissBanner()" title="Ocultar">✕</button>' : ''}
+    <div class="setup-title">${title}</div>
+    <ul class="checklist">
+      ${checkItem(h.blackhole, "BlackHole instalado", 'Instalá <b>BlackHole</b> (driver de audio virtual gratis) y reiniciá la Mac.')}
+      ${checkItem(h.device.ok, "Dispositivo de audio: " + (h.device.name || ""), 'Elegí tu dispositivo agregado en ⚙ Configuración y tocá Probar.')}
+      ${checkItem(h.api_key, "API key de Claude configurada", 'Pegá tu ANTHROPIC_API_KEY en ⚙ Configuración (o en el .env).')}
+      ${checkItem(h.notion, "Notion conectado", 'Cargá tu API key y database ID de Notion en ⚙ Configuración.', true)}
+    </ul>
+    ${withDismiss ? '<div class="setup-actions"><button class="regen-btn" onclick="openSettings()">⚙ Abrir Configuración</button></div>' : ''}`;
+}
+
+document.addEventListener("keydown", (e) => {
+  const ov = document.getElementById("settingsOverlay");
+  const modalOpen = ov && ov.style.display !== "none";
+  if (e.key === "Escape" && modalOpen) { closeSettings(); return; }
+  if (modalOpen) return;
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable) return;
+  if (e.code === "Space") { e.preventDefault(); toggle(); }
+  else if (e.key === "/") { e.preventDefault(); const s = document.getElementById("search"); if (s) s.focus(); }
+});
+
 loadTemplates();
 loadList();
 loadRecoverable();
+loadHealth();
 </script>
 </body>
 </html>

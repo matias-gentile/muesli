@@ -141,12 +141,22 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 5. **Grabar**. Mientras grabás vas a ver un **medidor de audio en vivo** (con un
    aviso **"Capturando ✓"** o **"Sin señal ⚠"** si el ruteo está mal — así te enterás
    en segundos, no después de una hora) y la **transcripción en vivo** a medida que se
-   completan los segmentos. Anotá lo que te importa en el área de notas — guían el resumen.
+   completan los segmentos. Podés **pausar/reanudar** con el botón **⏸ Pausar** (lo que
+   pase durante la pausa no se graba ni cuenta en el cronómetro). Anotá lo que te importa
+   en el área de notas — guían el resumen.
 6. **Detener y resumir**. La app transcribe, resume con Claude según el tipo y guarda.
 7. El resumen aparece en pantalla. Podés **renombrar** la reunión (clic en el título),
    **editar el resumen** (✎), **copiarlo** (⧉) o **descargarlo** como `.md` (⤓). En la
    barra lateral, las reuniones se **agrupan por día**, muestran su **tipo** y se pueden
    **buscar** por título. Todo queda también como `.md` en `notes/`.
+
+**Atajos de teclado:** <kbd>espacio</kbd> graba/detiene · <kbd>/</kbd> enfoca la búsqueda ·
+<kbd>Esc</kbd> cierra Configuración. (El espacio no interfiere cuando estás escribiendo en
+un campo.)
+
+**Primer uso:** si falta algo del setup (BlackHole, dispositivo de audio o API key),
+arriba aparece un **checklist de bienvenida** que te dice exactamente qué configurar. El
+mismo estado lo tenés siempre dentro de **⚙ Configuración**.
 
 ---
 

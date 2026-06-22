@@ -60,6 +60,7 @@ class ChunkedRecorder:
         self._stream = None
         self._writer_thread = None
         self.recording = False
+        self.paused = False  # en pausa: no captura audio (la grabación sigue abierta)
         self.peak = 0.0  # amplitud máxima vista (0..1), para detectar silencio
         self.level = 0.0  # nivel instantáneo (0..1), para el medidor en vivo
         self._chunk_index = 0
@@ -86,6 +87,9 @@ class ChunkedRecorder:
     def _callback(self, indata, frames, time_info, status):
         if status:
             print(f"[audio] {status}")
+        if self.paused:  # en pausa: no escribimos ni medimos (omitimos ese audio)
+            self.level = 0.0
+            return
         mono = indata.mean(axis=1, keepdims=True).astype(np.float32)
         lvl = float(np.abs(mono).max()) if mono.size else 0.0
         self.level = lvl
@@ -130,8 +134,15 @@ class ChunkedRecorder:
         self._close_chunk()  # cierra el último chunk (parcial)
 
     # ---- API pública -----------------------------------------------------
+    def pause(self):
+        self.paused = True
+
+    def resume(self):
+        self.paused = False
+
     def start(self):
         self.recording = True
+        self.paused = False
         self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self._writer_thread.start()
         self._stream = sd.InputStream(
