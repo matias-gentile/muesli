@@ -1,4 +1,6 @@
 """App Flask: panel de control para grabar, transcribir y resumir reuniones."""
+from __future__ import annotations
+
 import sounddevice as sd
 from flask import Flask, jsonify, render_template, request
 
