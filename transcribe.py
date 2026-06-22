@@ -7,7 +7,7 @@ mlx-whisper en el README.
 """
 from faster_whisper import WhisperModel
 
-from config import WHISPER_MODEL
+from config import WHISPER_MODEL, WHISPER_VAD
 
 _model = None
 
@@ -23,7 +23,7 @@ def _get_model() -> WhisperModel:
 def transcribe(wav_path) -> str:
     """Devuelve la transcripción completa como texto plano."""
     model = _get_model()
-    segments, info = model.transcribe(str(wav_path), vad_filter=True)
+    segments, info = model.transcribe(str(wav_path), vad_filter=WHISPER_VAD)
     print(f"[whisper] idioma detectado: {info.language} (p={info.language_probability:.2f})")
     parts = [seg.text.strip() for seg in segments]
     return " ".join(p for p in parts if p).strip()

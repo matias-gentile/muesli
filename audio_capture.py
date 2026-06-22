@@ -31,6 +31,7 @@ class Recorder:
         self._writer_thread = None
         self.recording = False
         self.path = None
+        self.peak = 0.0  # amplitud máxima vista (0..1), para detectar silencio
 
     # ---- utilidades de dispositivos -------------------------------------
     @staticmethod
@@ -56,6 +57,9 @@ class Recorder:
             print(f"[audio] {status}")
         # Mezcla todos los canales (sistema + mic) a mono
         mono = indata.mean(axis=1, keepdims=True).astype(np.float32)
+        lvl = float(np.abs(mono).max()) if mono.size else 0.0
+        if lvl > self.peak:
+            self.peak = lvl
         self._q.put(mono.copy())
 
     def _writer_loop(self):
@@ -70,6 +74,7 @@ class Recorder:
     def start(self) -> Path:
         ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.path = self.out_dir / f"meeting-{ts}.wav"
+        self.peak = 0.0
         self._file = sf.SoundFile(
             self.path, mode="w", samplerate=self.samplerate,
             channels=1, subtype="PCM_16",

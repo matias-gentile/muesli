@@ -153,6 +153,7 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 | `ANTHROPIC_API_KEY` | Tu clave de la API de Claude |
 | `CLAUDE_MODEL` | `claude-sonnet-4-6` (recomendado), `claude-opus-4-8` (+calidad), `claude-haiku-4-5-20251001` (+barato) |
 | `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` (más grande = más preciso y lento) |
+| `WHISPER_VAD` | `0` (off, más permisivo con audio bajo) o `1` (descarta silencios) |
 | `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
 | `AUDIO_DEVICE_OUTPUT_ONLY` | Dispositivo para el modo "solo salida" (por defecto `BlackHole`) |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
@@ -207,6 +208,13 @@ correcto en `AUDIO_DEVICE_NAME`. Confirmá que creaste el Aggregate Device.
 **Graba, pero el resumen solo tiene tu voz (no lo que dijeron los demás)**
 La salida del sistema no está yendo a BlackHole. Poné la salida en el
 *Multi-Output Device* antes de grabar.
+
+**El resumen dice "no hay contenido" / sale vacío**
+La grabación quedó en silencio. Casi siempre es porque la **salida del sistema no
+está en el Multi-Output Device** (entonces BlackHole no captó nada). Ponela ahí y
+volvé a probar. Para confirmar, reproducí el último `.wav` en `recordings/`: si no
+suena, es eso. Muesli ahora detecta nivel ≈ 0 y te avisa en vez de resumir el vacío.
+Si el audio existe pero estaba muy bajo, además podés dejar `WHISPER_VAD=0`.
 
 **No se oye nada durante la reunión**
 Estás mandando la salida solo a BlackHole. Cambiá la salida al *Multi-Output

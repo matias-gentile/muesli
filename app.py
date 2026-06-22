@@ -68,11 +68,28 @@ def stop():
     context = data.get("context", "")
 
     wav_path = recorder.stop()
+
+    # Si no entró audio (nivel ≈ 0), avisamos en vez de resumir el vacío.
+    if getattr(recorder, "peak", 1.0) < 0.001:
+        return jsonify({"error": "No se detectó audio (nivel ≈ 0). Antes de grabar, poné "
+                                 "la salida del sistema en el Multi-Output Device. En modo "
+                                 "'solo salida', BlackHole solo capta si el sonido del "
+                                 "sistema pasa por ahí."}), 200
+
     try:
         transcript = transcribe(wav_path)
+    except Exception as e:
+        return jsonify({"error": f"fallo transcribiendo: {e}"}), 500
+
+    if not transcript.strip():
+        return jsonify({"error": "Se grabó audio pero no se detectó voz para transcribir. "
+                                 "Puede ser contenido sin habla, volumen muy bajo o ruido. "
+                                 "Probá subir el volumen de la fuente o acercar el micrófono."}), 200
+
+    try:
         summary = summarize(transcript, manual_notes, title, context_type, context)
     except Exception as e:
-        return jsonify({"error": f"fallo procesando: {e}"}), 500
+        return jsonify({"error": f"fallo resumiendo: {e}"}), 500
 
     note = storage.save_note(title, transcript, summary, manual_notes)
 

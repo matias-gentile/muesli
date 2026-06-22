@@ -16,6 +16,10 @@ NOTES_DIR.mkdir(exist_ok=True)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
+# Filtro de detección de voz (VAD) de Whisper. Por defecto OFF para no descartar
+# audio bajo o sin pausas claras. Poné WHISPER_VAD=1 si ves texto "alucinado"
+# en grabaciones con silencios.
+WHISPER_VAD = os.getenv("WHISPER_VAD", "0") == "1"
 
 # Dispositivo de entrada para "salida + micrófono": el dispositivo AGREGADO
 # (BlackHole + micrófono) que creaste en Audio MIDI Setup.
