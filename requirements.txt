@@ -5,4 +5,8 @@ soundfile>=0.12.1
 numpy>=1.24
 flask>=3.0
 python-dotenv>=1.0
-notion-client>=2.2.1   # opcional: integración con Notion
+notion-client>=2.2.1
+
+# Solo para la app de barra de menú de macOS (python menubar.py):
+rumps>=0.4.0 ; sys_platform == "darwin"
+pywebview>=5.0 ; sys_platform == "darwin"   # opcional: integración con Notion

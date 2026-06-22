@@ -146,6 +146,41 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 
 ---
 
+## Usar desde la barra de menú (sin navegador)
+
+En vez de abrir el navegador, podés usar Muesli desde la **barra de menú de macOS**
+(arriba a la derecha, estilo Granola). Corre el servidor por detrás y te deja
+grabar/parar y ver el estado desde un ícono 🎙️.
+
+**Instalá las dependencias de macOS** (rumps y pywebview) y arrancá así:
+
+```bash
+pip install -r requirements.txt
+python menubar.py
+```
+
+Vas a ver un 🎙️ en la barra de menú. Desde ahí:
+
+- **● Grabar / ■ Detener**: graba y para. Mientras grabás, el ícono muestra el
+  cronómetro (🔴 00:34). Al detener te pide un nombre para la reunión.
+- **Estado en vivo**: "Transcribiendo 3/12…", "Resumiendo con Claude…", y una
+  **notificación nativa** cuando el resumen está listo.
+- **Fuente de audio**: elegís "Salida + micrófono" o "Solo salida del sistema".
+- **Abrir panel**: abre la interfaz completa (historial, notas, tipo de reunión,
+  resúmenes) en una **ventana nativa** — la misma UI, pero sin navegador.
+
+La barra de menú y el panel comparten el mismo estado: si arrancás a grabar en uno,
+el otro lo refleja. Para una captura rápida alcanza con la barra (usa un nombre por
+defecto que podés cambiar al parar); si querés tomar notas o elegir el tipo de
+reunión, usá el panel.
+
+> **Notas:** la app web (`python app.py`) sigue funcionando igual si preferís el
+> navegador. Para que la barra arranque sola al iniciar sesión, podés crear un
+> *LaunchAgent* que ejecute `python menubar.py`. Y si las notificaciones no
+> aparecen, dale permiso en Ajustes → Notificaciones.
+
+---
+
 ## Reuniones largas
 
 Muesli graba en **segmentos de ~10 min** (`CHUNK_SECONDS`) y los va transcribiendo

@@ -74,9 +74,9 @@ def stop():
 
 @app.route("/api/status")
 def status():
-    if session is None:
-        return jsonify({"status": "idle"})
-    return jsonify(session.snapshot())
+    snap = session.snapshot() if session is not None else {"status": "idle"}
+    snap["recording"] = bool(recorder is not None and recorder.recording)
+    return jsonify(snap)
 
 
 @app.route("/api/notes")
