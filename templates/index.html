@@ -103,7 +103,7 @@
   .note-del:hover{opacity:1; color:var(--rec); background:var(--surface-3);}
   .recover-item{
     display:flex; align-items:center; gap:8px; padding:9px 10px; margin-top:4px;
-    border-radius:10px; border:1px dashed var(--border); background:var(--surface-1);
+    border-radius:10px; border:1px dashed var(--border); background:var(--surface);
   }
   .recover-main{flex:1; min-width:0;}
   .recover-main .t{font-size:13px; font-weight:600;}
@@ -114,6 +114,24 @@
     padding:5px 10px; border-radius:8px; transition:filter .12s ease;
   }
   .recover-btn:hover{filter:brightness(1.05);}
+  .live-panel{
+    margin:16px 0 4px; padding:14px 16px; border-radius:14px;
+    background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm);
+  }
+  .meter-row{display:flex; align-items:center; gap:11px;}
+  .meter-label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint);}
+  .meter{flex:1; height:10px; border-radius:6px; background:var(--surface-3); overflow:hidden;}
+  .meter-fill{height:100%; width:0%; border-radius:6px;
+    background:linear-gradient(90deg, var(--accent), var(--accent-2)); transition:width .1s linear;}
+  .signal-pill{font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap;}
+  .signal-pill.ok{background:rgba(46,158,84,.15); color:var(--ok);}
+  .signal-pill.warn{background:rgba(224,74,60,.15); color:var(--rec);}
+  .signal-pill.idle{background:var(--surface-3); color:var(--text-faint);}
+  .live-transcript{
+    margin-top:13px; max-height:210px; overflow-y:auto; font-size:13px; line-height:1.55;
+    color:var(--text-dim); white-space:pre-wrap; word-break:break-word;
+  }
+  .lt-empty{color:var(--text-faint); font-style:italic;}
 
   /* Main */
   main{position:relative; z-index:1; padding:34px 44px 64px; overflow-y:auto; max-width:940px;}
@@ -303,6 +321,17 @@
     <div class="label">Mis notas</div>
     <textarea id="notes" placeholder="Anotá lo que te importa mientras hablan…&#10;• decisión sobre precios&#10;• pendiente: enviar propuesta"></textarea>
 
+    <div id="livePanel" class="live-panel" style="display:none">
+      <div class="meter-row">
+        <span class="meter-label">Audio</span>
+        <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
+        <span id="signalPill" class="signal-pill idle">esperando señal…</span>
+      </div>
+      <div id="liveTranscript" class="live-transcript">
+        <span class="lt-empty">La transcripción va apareciendo a medida que se completan los segmentos…</span>
+      </div>
+    </div>
+
     <div id="status" class="status"></div>
     <div id="result"></div>
   </main>
@@ -312,6 +341,7 @@ let recording = false;
 let t0 = null, timerId = null;
 let activeId = null;
 let audioMode = "full";  // "full" = salida + micrófono, "output" = solo salida
+let levelTimer = null, lastPartialLen = -1;
 
 document.querySelectorAll("#audioMode .seg-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -333,6 +363,44 @@ function tick() {
   document.getElementById("timer").textContent = fmt(s);
 }
 
+function startLiveMeter() {
+  const panel = document.getElementById("livePanel");
+  panel.style.display = "";
+  document.getElementById("meterFill").style.width = "0%";
+  document.getElementById("liveTranscript").innerHTML =
+    '<span class="lt-empty">La transcripción va apareciendo a medida que se completan los segmentos…</span>';
+  const pill = document.getElementById("signalPill");
+  pill.className = "signal-pill idle"; pill.textContent = "esperando señal…";
+  lastPartialLen = -1;
+  clearInterval(levelTimer);
+  levelTimer = setInterval(pollLevel, 600);
+}
+
+function stopLiveMeter() {
+  clearInterval(levelTimer); levelTimer = null;
+  document.getElementById("livePanel").style.display = "none";
+}
+
+async function pollLevel() {
+  let d;
+  try { d = await (await fetch("/api/level")).json(); } catch (e) { return; }
+  if (!d.recording) return;
+  // medidor (raíz cuadrada para realzar niveles bajos de voz)
+  const pct = Math.min(100, Math.round(Math.sqrt(Math.max(0, d.level)) * 100));
+  document.getElementById("meterFill").style.width = pct + "%";
+  // indicador de señal: usa el pico acumulado para no titilar en las pausas
+  const pill = document.getElementById("signalPill");
+  if (d.peak > 0.01) { pill.className = "signal-pill ok"; pill.textContent = "Capturando ✓"; }
+  else if (t0 && Date.now() - t0 > 4000) { pill.className = "signal-pill warn"; pill.textContent = "Sin señal — revisá el audio ⚠"; }
+  // transcripción parcial en vivo
+  if (d.partial && d.partial.length !== lastPartialLen) {
+    lastPartialLen = d.partial.length;
+    const lt = document.getElementById("liveTranscript");
+    lt.textContent = d.partial;
+    lt.scrollTop = lt.scrollHeight;
+  }
+}
+
 async function toggle() {
   if (!recording) await start();
   else await stop();
@@ -351,6 +419,7 @@ async function start() {
   setModeEnabled(false);
   t0 = Date.now();
   timerId = setInterval(tick, 1000); tick();
+  startLiveMeter();
   const btn = document.getElementById("recBtn");
   btn.classList.add("recording");
   document.getElementById("recLabel").innerHTML =
@@ -362,6 +431,7 @@ async function start() {
 async function stop() {
   recording = false;
   clearInterval(timerId);
+  stopLiveMeter();
   document.getElementById("recBtn").classList.remove("recording");
   document.getElementById("recBtn").disabled = true;
   document.getElementById("recLabel").textContent = "Procesando…";
@@ -416,6 +486,7 @@ async function pollStatus() {
 }
 
 function finishStop() {
+  stopLiveMeter();
   document.getElementById("recBtn").disabled = false;
   document.getElementById("recLabel").textContent = "● Grabar";
   document.getElementById("timer").textContent = "";

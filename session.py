@@ -63,6 +63,12 @@ class Session:
                 "error": self.error,
             }
 
+    def live_state(self):
+        """Estado liviano para el panel en vivo: transcripción parcial y nº de segmentos."""
+        with self._lock:
+            parts = [self._transcripts[i] for i in sorted(self._transcripts)]
+            return {"partial": "\n".join(parts), "done_chunks": len(parts)}
+
     # ---- interno ---------------------------------------------------------
     def _set(self, **kw):
         with self._lock:

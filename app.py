@@ -82,6 +82,20 @@ def status():
     return jsonify(snap)
 
 
+@app.route("/api/level")
+def level():
+    """Poll liviano durante la grabación: nivel de audio + transcripción parcial."""
+    rec = bool(recorder is not None and recorder.recording)
+    live = session.live_state() if session is not None else {"partial": "", "done_chunks": 0}
+    return jsonify({
+        "recording": rec,
+        "level": float(recorder.level) if rec else 0.0,
+        "peak": float(recorder.peak) if rec else 0.0,
+        "partial": live["partial"],
+        "done_chunks": live["done_chunks"],
+    })
+
+
 @app.route("/api/notes")
 def notes():
     return jsonify(storage.list_notes())

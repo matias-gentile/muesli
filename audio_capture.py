@@ -38,6 +38,7 @@ class ChunkedRecorder:
         self._writer_thread = None
         self.recording = False
         self.peak = 0.0  # amplitud máxima vista (0..1), para detectar silencio
+        self.level = 0.0  # nivel instantáneo (0..1), para el medidor en vivo
         self._chunk_index = 0
         self._chunk_file = None
         self._chunk_path = None
@@ -64,6 +65,7 @@ class ChunkedRecorder:
             print(f"[audio] {status}")
         mono = indata.mean(axis=1, keepdims=True).astype(np.float32)
         lvl = float(np.abs(mono).max()) if mono.size else 0.0
+        self.level = lvl
         if lvl > self.peak:
             self.peak = lvl
         self._q.put(mono.copy())

@@ -138,8 +138,10 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 4. Elegí **qué grabar** con el toggle: **"Salida + micrófono"** (vos y los demás) o
    **"Solo salida"** (solo lo que suena en el sistema, sin tu voz — útil para
    videos, podcasts o llamadas donde no querés grabarte).
-5. **Grabar**. Mientras hablan, anotá lo que te importa en el área de notas — esas
-   notas guían el resumen.
+5. **Grabar**. Mientras grabás vas a ver un **medidor de audio en vivo** (con un
+   aviso **"Capturando ✓"** o **"Sin señal ⚠"** si el ruteo está mal — así te enterás
+   en segundos, no después de una hora) y la **transcripción en vivo** a medida que se
+   completan los segmentos. Anotá lo que te importa en el área de notas — guían el resumen.
 6. **Detener y resumir**. La app transcribe, resume con Claude según el tipo y guarda.
 7. El resumen aparece en pantalla; las grabaciones quedan en la barra lateral y
    como `.md` en `notes/`.
