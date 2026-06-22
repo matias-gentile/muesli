@@ -195,6 +195,40 @@ reunión, usá el panel.
 
 ---
 
+## Abrir Muesli con doble clic (ejecutable en el Escritorio)
+
+Si no querés arrancarlo desde la Terminal ni VS Code, podés generar un **`Muesli.app`**
+en el Escritorio y abrirlo con doble clic. Abre la app en **modo barra de menú** (ícono
+🎙️ arriba, sin Terminal ni navegador).
+
+**Una sola vez**, doble clic en **`build_app.command`** (está en la carpeta del proyecto).
+Eso crea `Muesli.app` en tu Escritorio. Listo: a partir de ahí abrís Muesli con doble clic.
+
+```bash
+# (alternativa por Terminal, si preferís)
+./build_app.command
+```
+
+Detalles:
+
+- El `.app` apunta al **entorno virtual** del proyecto si existe (`.venv/`), o al
+  `python3` del sistema. Asegurate de tener las dependencias instaladas en ese entorno
+  (`pip install -r requirements.txt`) — el script te avisa si falta `rumps`.
+- La **primera vez**, macOS pide permiso de **micrófono**: dale *Permitir* (o cargalo en
+  Ajustes → Privacidad y seguridad → Micrófono).
+- Como lo generás vos mismo en tu Mac, **no aparece la alerta de Gatekeeper** de apps de
+  desarrolladores no identificados.
+- ¿No abre nada al doble clic? Mirá el log en **`~/Library/Logs/Muesli.log`**.
+- Si **movés la carpeta** del proyecto, volvé a correr `build_app.command` (el `.app`
+  guarda la ruta absoluta).
+- Podés arrastrar `Muesli.app` a **Aplicaciones**, y/o agregarlo a **Ajustes → General →
+  Ítems de inicio** para que se abra solo al encender la Mac.
+
+> ¿Preferís el panel completo en vez del menú? Desde el ícono 🎙️ → **Abrir panel** se
+> abre la ventana nativa con todo (historial, notas, tipos, resúmenes).
+
+---
+
 ## Reuniones largas
 
 Muesli graba en **segmentos de ~10 min** (`CHUNK_SECONDS`) y los va transcribiendo
