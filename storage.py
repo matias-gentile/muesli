@@ -69,28 +69,36 @@ def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> di
     }
 
 
-def update_summary(note_id, summary) -> bool:
-    """Reemplaza el resumen de una nota existente (regenerar) y reescribe su .md."""
+def update_note(note_id, title=None, summary=None) -> bool:
+    """Actualiza título y/o resumen de una nota y reescribe su .md."""
     c = _conn()
     row = c.execute(
-        "SELECT title, created_at, path, transcript, manual_notes FROM notes WHERE id=?",
+        "SELECT title, created_at, path, transcript, summary, manual_notes FROM notes WHERE id=?",
         (note_id,),
     ).fetchone()
     if not row:
         c.close()
         return False
-    title, created_at, path, transcript, manual_notes = row
-    c.execute("UPDATE notes SET summary=? WHERE id=?", (summary, note_id))
+    cur_title, created_at, path, transcript, cur_summary, manual_notes = row
+    new_title = (title if title is not None else cur_title)
+    new_title = (new_title or "").strip() or "Reunión"
+    new_summary = summary if summary is not None else cur_summary
+    c.execute("UPDATE notes SET title=?, summary=? WHERE id=?", (new_title, new_summary, note_id))
     c.commit()
     c.close()
     if path:
         try:
             created = datetime.datetime.fromisoformat(created_at)
             Path(path).write_text(
-                _render_md(title, created, summary, manual_notes, transcript), encoding="utf-8")
+                _render_md(new_title, created, new_summary, manual_notes, transcript), encoding="utf-8")
         except Exception:
             pass
     return True
+
+
+def update_summary(note_id, summary) -> bool:
+    """Reemplaza solo el resumen de una nota (usado al regenerar)."""
+    return update_note(note_id, summary=summary)
 
 
 def used_audio_dirs() -> set:

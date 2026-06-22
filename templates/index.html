@@ -252,12 +252,37 @@
     color:var(--text-dim); font-size:13px; line-height:1.5;
   }
   .regen-btn{
-    margin:14px 0 0; padding:8px 14px; border-radius:9px; cursor:pointer;
+    padding:8px 14px; border-radius:9px; cursor:pointer;
     background:var(--surface-2); border:1px solid var(--border); color:var(--accent-text);
     font-size:13px; font-weight:600;
     transition:background .12s ease, border-color .12s ease;
   }
   .regen-btn:hover{background:var(--surface-3); border-color:var(--accent-text);}
+  .note-actions{display:flex; gap:8px; margin:14px 0 0; flex-wrap:wrap;}
+  .edit-btn{
+    padding:8px 14px; border-radius:9px; cursor:pointer;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim);
+    font-size:13px; font-weight:600;
+    transition:background .12s ease, border-color .12s ease;
+  }
+  .edit-btn:hover{background:var(--surface-3); border-color:var(--text-faint);}
+  .note-header{display:flex; align-items:baseline; gap:12px; margin-bottom:8px; flex-wrap:wrap;}
+  .note-title-edit{
+    font-family:var(--font-display); font-size:23px; font-weight:600; color:var(--text);
+    border:1px solid transparent; background:transparent; padding:3px 7px; margin-left:-7px;
+    border-radius:9px; flex:1; min-width:200px; outline:none;
+    transition:background .12s ease, border-color .12s ease;
+  }
+  .note-title-edit:hover{background:var(--surface-2);}
+  .note-title-edit:focus{background:var(--surface); border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);}
+  .note-date{font-size:12px; color:var(--text-faint); white-space:nowrap;}
+  .edit-head{font-family:var(--font-display); font-size:20px; font-weight:600; color:var(--text);}
+  .summary-area{
+    width:100%; min-height:300px; padding:14px 16px; border-radius:12px;
+    border:1px solid var(--border); background:var(--surface); color:var(--text);
+    font-family:var(--font-ui); font-size:14px; line-height:1.65; resize:vertical; outline:none;
+  }
+  .summary-area:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);}
   details{margin-top:18px;}
   summary{
     cursor:pointer; color:var(--text-dim); font-size:14px; list-style:none;
@@ -342,6 +367,7 @@ let t0 = null, timerId = null;
 let activeId = null;
 let audioMode = "full";  // "full" = salida + micrófono, "output" = solo salida
 let levelTimer = null, lastPartialLen = -1;
+let curSummary = "";  // resumen crudo de la nota abierta (para editar)
 
 document.querySelectorAll("#audioMode .seg-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -469,8 +495,13 @@ async function pollStatus() {
   } else if (s.status === "done") {
     finishStop();
     setStatus("✓ Listo y guardado.");
-    render(s.result.summary, s.result.transcript, s.result.notion_url, s.result.notion_error,
-           (s.result.note || {}).id, s.result.summary_error);
+    render({
+      summary: s.result.summary, transcript: s.result.transcript,
+      notionUrl: s.result.notion_url, notionError: s.result.notion_error,
+      summaryError: s.result.summary_error,
+      noteId: (s.result.note || {}).id, title: (s.result.note || {}).title,
+      createdAt: (s.result.note || {}).created_at,
+    });
     await loadList();
     await loadRecoverable();
     clearComposer();
@@ -522,29 +553,84 @@ function mdToHtml(md) {
   return html;
 }
 
-function render(summary, transcript, notionUrl, notionError, noteId, summaryError) {
+function escAttr(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function render(o) {
+  o = o || {};
+  const noteId = o.noteId || null;
+  curSummary = o.summary || "";
+  let header = "";
+  if (noteId) {
+    const dt = o.createdAt ? new Date(o.createdAt).toLocaleString("es") : "";
+    header = `<div class="note-header">
+        <input id="titleEdit" class="note-title-edit" value="${escAttr(o.title)}"
+               title="Clic para renombrar" onchange="saveTitle(${noteId}, this.value)" />
+        <span class="note-date">${dt}</span>
+      </div>`;
+  }
   let notion = "";
-  if (notionUrl) {
-    notion = `<a class="notion-link" href="${notionUrl}" target="_blank" rel="noopener">📄 Abrir en Notion ↗</a>`;
-  } else if (notionError) {
-    notion = `<div class="notion-warn">⚠️ No se pudo enviar a Notion: ${notionError.replace(/</g, "&lt;")}</div>`;
+  if (o.notionUrl) {
+    notion = `<a class="notion-link" href="${o.notionUrl}" target="_blank" rel="noopener">📄 Abrir en Notion ↗</a>`;
+  } else if (o.notionError) {
+    notion = `<div class="notion-warn">⚠️ No se pudo enviar a Notion: ${(o.notionError).replace(/</g, "&lt;")}</div>`;
   }
   let summaryWarn = "";
-  if (summaryError) {
-    summaryWarn = `<div class="notion-warn">⚠️ El resumen falló: ${summaryError.replace(/</g, "&lt;")}. La transcripción está guardada — probá "Regenerar resumen".</div>`;
+  if (o.summaryError) {
+    summaryWarn = `<div class="notion-warn">⚠️ El resumen falló: ${(o.summaryError).replace(/</g, "&lt;")}. La transcripción está guardada — probá "↻ Regenerar".</div>`;
   }
-  const regen = noteId
-    ? `<button class="regen-btn" onclick="resummarize(${noteId})">↻ Regenerar resumen</button>`
-    : "";
-  const html = `
+  const actions = noteId ? `<div class="note-actions">
+        <button class="edit-btn" onclick="editSummary(${noteId})">✎ Editar resumen</button>
+        <button class="regen-btn" onclick="resummarize(${noteId})">↻ Regenerar</button>
+      </div>` : "";
+  document.getElementById("result").innerHTML = `
+    ${header}
     ${notion}
     ${summaryWarn}
-    <div class="card">${mdToHtml(summary)}</div>
-    ${regen}
+    <div class="card">${mdToHtml(curSummary)}</div>
+    ${actions}
     <details><summary>Ver transcripción completa</summary>
-      <div class="transcript">${(transcript || "").replace(/</g, "&lt;")}</div>
+      <div class="transcript">${(o.transcript || "").replace(/</g, "&lt;")}</div>
     </details>`;
-  document.getElementById("result").innerHTML = html;
+}
+
+function editSummary(id) {
+  document.getElementById("result").innerHTML = `
+    <div class="note-header"><div class="edit-head">Editando resumen</div></div>
+    <textarea id="summaryArea" class="summary-area"></textarea>
+    <div class="note-actions">
+      <button class="regen-btn" onclick="saveSummary(${id})">Guardar</button>
+      <button class="edit-btn" onclick="openNote(${id})">Cancelar</button>
+    </div>`;
+  const ta = document.getElementById("summaryArea");
+  ta.value = curSummary; ta.focus();
+}
+
+async function saveSummary(id) {
+  const summary = document.getElementById("summaryArea").value;
+  setStatus("Guardando…", true);
+  try {
+    const r = await fetch(`/api/notes/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ summary }),
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); setStatus("⚠️ " + (e.error || "no se pudo guardar")); return; }
+    setStatus("✓ Guardado.");
+    await openNote(id);
+  } catch (e) { setStatus("⚠️ Error al guardar."); }
+}
+
+async function saveTitle(id, value) {
+  const title = (value || "").trim();
+  if (!title) return;
+  try {
+    await fetch(`/api/notes/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    await loadList();
+  } catch (e) {}
 }
 
 async function loadTemplates() {
@@ -574,7 +660,8 @@ async function openNote(id) {
   const r = await fetch("/api/notes/" + id);
   const n = await r.json();
   setStatus("");
-  render(n.summary, n.transcript, null, null, n.id, null);
+  render({ summary: n.summary, transcript: n.transcript, noteId: n.id,
+           title: n.title, createdAt: n.created_at });
   await loadList();
 }
 

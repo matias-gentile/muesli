@@ -116,6 +116,18 @@ def delete_note(note_id):
     return jsonify({"status": "deleted", "id": note_id})
 
 
+@app.route("/api/notes/<int:note_id>", methods=["PATCH"])
+def edit_note(note_id):
+    data = request.get_json(silent=True) or {}
+    title = data.get("title")
+    summary = data.get("summary")
+    if title is None and summary is None:
+        return jsonify({"error": "nada para actualizar"}), 400
+    if not storage.update_note(note_id, title=title, summary=summary):
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(storage.get_note(note_id))
+
+
 @app.route("/api/notes/<int:note_id>/resummarize", methods=["POST"])
 def resummarize(note_id):
     n = storage.get_note(note_id)
