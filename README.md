@@ -159,8 +159,11 @@ Muesli graba en **segmentos de ~10 min** (`CHUNK_SECONDS`) y los va transcribien
   "Transcribiendo segmentos… 8 / 12" y luego "Resumiendo con Claude…".
 
 Al final se concatenan todas las transcripciones en orden y se genera **un único
-resumen**. Probado para reuniones de hasta ~2 h. Si transcribir mientras grabás
-hiciera glitchear el audio (CPU saturada), usá un `WHISPER_MODEL` más chico.
+resumen**. El **resumen se adapta a la duración**: las reuniones largas generan un
+resumen más detallado y exhaustivo (recorriendo los temas uno por uno), priorizando
+capturar bien lo discutido por sobre la brevedad. Probado para reuniones de hasta
+~2 h. Si transcribir mientras grabás hiciera glitchear el audio (CPU saturada), usá
+un `WHISPER_MODEL` más chico.
 
 ---
 

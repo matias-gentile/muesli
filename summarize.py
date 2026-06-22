@@ -19,8 +19,11 @@ Reglas:
 - Responde SIEMPRE en español y en Markdown, usando exactamente las secciones \
 de la plantilla indicada. Omite las secciones que queden vacías.
 - Da prioridad a las notas manuales para decidir el énfasis.
-- Sé concreto y conciso. No inventes información que no esté en la transcripción \
-ni en las notas.
+- Priorizá CAPTURAR FIELMENTE lo que se habló por encima de la brevedad. La \
+extensión del resumen debe ser proporcional a la reunión: si fue larga y con \
+mucho contenido, sé detallado y cubrí todos los temas a fondo; si fue corta, sé \
+breve. No omitas temas, decisiones ni detalles importantes.
+- No inventes información que no esté en la transcripción ni en las notas.
 - Si la transcripción es muy ruidosa o incompleta, indícalo en una línea al final."""
 
 # Cada plantilla define la estructura de secciones para ese tipo de grabación.
@@ -155,11 +158,25 @@ def type_label(context_type):
 
 def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, context=""):
     template = TEMPLATES.get(context_type, TEMPLATES[DEFAULT_TYPE])
+
+    words = len(transcript.split())
+    # Presupuesto de salida proporcional a la longitud: cuanto más larga la
+    # reunión, más detallado puede ser el resumen (sin un tope fijo que lo recorte).
+    max_tokens = min(8000, max(1500, int(words * 0.35)))
+
     system = (
         BASE_SYSTEM
         + f"\n\n=== PLANTILLA A USAR (tipo: {template['label']}) ===\n"
         + template["structure"]
     )
+    if words > 3500:  # reunión larga (~25+ min): pedir un resumen exhaustivo
+        system += (
+            f"\n\n=== REUNIÓN LARGA (~{words} palabras) ===\n"
+            "Hacé un resumen DETALLADO y exhaustivo. En 'Puntos clave' recorré los temas "
+            "tratados uno por uno, con la sustancia de cada discusión (qué se planteó, qué "
+            "posturas hubo, en qué se quedó), no solo títulos. Es preferible un resumen "
+            "largo y completo a uno breve que se pierda cosas."
+        )
 
     parts = [f"TIPO DE GRABACIÓN: {template['label']}"]
     if title:
@@ -173,7 +190,7 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     client = Anthropic()  # lee ANTHROPIC_API_KEY del entorno
     message = client.messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=2000,
+        max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_content}],
     )
