@@ -206,6 +206,11 @@
     transition:border-color .15s ease, background .15s ease;
   }
   .notion-link:hover{border-color:var(--accent-text); background:var(--surface-3);}
+  .notion-warn{
+    margin:18px 0 0; padding:10px 14px; border-radius:10px;
+    background:var(--surface-2); border:1px solid var(--border);
+    color:var(--text-dim); font-size:13px; line-height:1.5;
+  }
   details{margin-top:18px;}
   summary{
     cursor:pointer; color:var(--text-dim); font-size:14px; list-style:none;
@@ -364,7 +369,7 @@ async function pollStatus() {
   } else if (s.status === "done") {
     finishStop();
     setStatus("✓ Listo y guardado.");
-    render(s.result.summary, s.result.transcript, s.result.notion_url);
+    render(s.result.summary, s.result.transcript, s.result.notion_url, s.result.notion_error);
     await loadList();
     clearComposer();
     return;
@@ -414,10 +419,13 @@ function mdToHtml(md) {
   return html;
 }
 
-function render(summary, transcript, notionUrl) {
-  const notion = notionUrl
-    ? `<a class="notion-link" href="${notionUrl}" target="_blank" rel="noopener">📄 Abrir en Notion ↗</a>`
-    : "";
+function render(summary, transcript, notionUrl, notionError) {
+  let notion = "";
+  if (notionUrl) {
+    notion = `<a class="notion-link" href="${notionUrl}" target="_blank" rel="noopener">📄 Abrir en Notion ↗</a>`;
+  } else if (notionError) {
+    notion = `<div class="notion-warn">⚠️ No se pudo enviar a Notion: ${notionError.replace(/</g, "&lt;")}</div>`;
+  }
   const html = `
     ${notion}
     <div class="card">${mdToHtml(summary)}</div>

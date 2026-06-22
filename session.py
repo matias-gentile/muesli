@@ -101,15 +101,18 @@ class Session:
                                 self.context_type, self.context)
             note = storage.save_note(self.title, transcript, summary, self.manual_notes)
 
-            notion_url = None
-            try:
-                notion_url = notion_sync.sync(
-                    self.title, summary, type_label(self.context_type), note["created_at"])
-            except Exception as e:
-                print(f"[notion] no se pudo sincronizar: {e}")
+            notion_url, notion_error = None, None
+            if notion_sync.is_enabled():
+                try:
+                    notion_url = notion_sync.sync(
+                        self.title, summary, type_label(self.context_type), note["created_at"])
+                except Exception as e:
+                    notion_error = str(e)
+                    print(f"[notion] no se pudo sincronizar: {e}")
 
             self._set(result={"summary": summary, "transcript": transcript,
-                              "note": note, "notion_url": notion_url},
+                              "note": note, "notion_url": notion_url,
+                              "notion_error": notion_error},
                       status="done")
         except Exception as e:
             self._set(status="error", error=f"fallo procesando: {e}")
