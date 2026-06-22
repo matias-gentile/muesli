@@ -101,6 +101,19 @@
   }
   .note-item:hover .note-del{opacity:.7;}
   .note-del:hover{opacity:1; color:var(--rec); background:var(--surface-3);}
+  .recover-item{
+    display:flex; align-items:center; gap:8px; padding:9px 10px; margin-top:4px;
+    border-radius:10px; border:1px dashed var(--border); background:var(--surface-1);
+  }
+  .recover-main{flex:1; min-width:0;}
+  .recover-main .t{font-size:13px; font-weight:600;}
+  .recover-main .d{font-size:11px; color:var(--text-faint); margin-top:2px;}
+  .recover-btn{
+    flex-shrink:0; border:1px solid var(--accent-text); background:var(--accent);
+    color:#fff; cursor:pointer; font-size:12px; font-weight:600;
+    padding:5px 10px; border-radius:8px; transition:filter .12s ease;
+  }
+  .recover-btn:hover{filter:brightness(1.05);}
 
   /* Main */
   main{position:relative; z-index:1; padding:34px 44px 64px; overflow-y:auto; max-width:940px;}
@@ -265,6 +278,7 @@
       <div class="eyebrow">Grabaciones</div>
       <div id="list"></div>
     </div>
+    <div id="recoverable" class="side-section"></div>
   </aside>
 
   <main>
@@ -388,6 +402,7 @@ async function pollStatus() {
     render(s.result.summary, s.result.transcript, s.result.notion_url, s.result.notion_error,
            (s.result.note || {}).id, s.result.summary_error);
     await loadList();
+    await loadRecoverable();
     clearComposer();
     return;
   } else if (s.status === "error") {
@@ -523,8 +538,51 @@ async function deleteNote(event, id) {
   await loadList();
 }
 
+function prettyFolder(name) {
+  const m = name.match(/meeting-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/);
+  return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : name;
+}
+
+async function loadRecoverable() {
+  let items = [];
+  try { items = await (await fetch("/api/recoverable")).json(); } catch (e) { return; }
+  const el = document.getElementById("recoverable");
+  if (!items.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="eyebrow">Sin procesar (${items.length})</div>` +
+    items.map(r => `
+      <div class="recover-item">
+        <div class="recover-main">
+          <div class="t">${prettyFolder(r.name)}</div>
+          <div class="d">${r.chunks} segmento(s) · audio guardado</div>
+        </div>
+        <button class="recover-btn" onclick='recoverFolder(${JSON.stringify(r.folder)}, ${JSON.stringify(prettyFolder(r.name))})'>Recuperar</button>
+      </div>`).join("");
+}
+
+async function recoverFolder(folder, label) {
+  let title = "";
+  try { title = prompt("Nombre para la reunión recuperada:", "Reunión " + label) || ""; }
+  catch (e) {}
+  if (title === null) return;  // canceló
+  setStatus("Recuperando grabación… (re-transcribe el audio, puede tardar)", true);
+  document.getElementById("recBtn").disabled = true;
+  setModeEnabled(false);
+  try {
+    const r = await fetch("/api/recover", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder, title, context_type: document.getElementById("ctype").value }),
+    });
+    const d = await r.json();
+    if (d.error) { finishStop(); setStatus("⚠️ " + d.error); return; }
+    pollStatus();  // reutiliza el mismo polling: Transcribiendo N/M -> Resumiendo -> Listo
+  } catch (e) {
+    finishStop(); setStatus("⚠️ No se pudo iniciar la recuperación.");
+  }
+}
+
 loadTemplates();
 loadList();
+loadRecoverable();
 </script>
 </body>
 </html>

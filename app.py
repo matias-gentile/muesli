@@ -5,12 +5,15 @@ segundo plano; /api/stop devuelve enseguida y el frontend consulta /api/status.
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import sounddevice as sd
 from flask import Flask, jsonify, render_template, request
 
 import storage
 from audio_capture import ChunkedRecorder
-from config import AUDIO_DEVICE_NAME, AUDIO_DEVICE_OUTPUT_ONLY, CHUNK_SECONDS
+from config import AUDIO_DEVICE_NAME, AUDIO_DEVICE_OUTPUT_ONLY, CHUNK_SECONDS, RECORDINGS_DIR
 from session import Session
 from summarize import list_templates, summarize, type_label
 
@@ -117,6 +120,46 @@ def resummarize(note_id):
 
     storage.update_summary(note_id, summary)
     return jsonify({"summary": summary, "id": note_id})
+
+
+@app.route("/api/recoverable")
+def recoverable():
+    """Carpetas de grabación que todavía no tienen una nota (audio sin procesar)."""
+    used = {os.path.abspath(p) for p in storage.used_audio_dirs()}
+    out = []
+    for d in sorted(RECORDINGS_DIR.glob("meeting-*")):
+        if not d.is_dir() or os.path.abspath(str(d)) in used:
+            continue
+        chunks = sorted(d.glob("chunk_*.wav")) or sorted(d.glob("*.wav"))
+        if chunks:
+            out.append({"folder": str(d), "name": d.name, "chunks": len(chunks)})
+    return jsonify(out)
+
+
+@app.route("/api/recover", methods=["POST"])
+def recover():
+    """Recupera una grabación desde sus .wav: re-transcribe y resume (reusa Session)."""
+    global session, recorder
+    if recorder is not None and recorder.recording:
+        return jsonify({"error": "Hay una grabación en curso; esperá a que termine."}), 400
+
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "")
+    p = Path(folder)
+    if not folder or not p.exists():
+        return jsonify({"error": "No encontré esa carpeta de grabación."}), 404
+    chunks = sorted(p.glob("chunk_*.wav")) or sorted(p.glob("*.wav"))
+    if not chunks:
+        return jsonify({"error": "No hay archivos .wav en esa carpeta."}), 400
+
+    title = (data.get("title") or "").strip() or f"Recuperada {p.name.replace('meeting-', '')}"
+    ctype = data.get("context_type", "reunion")
+    session = Session()
+    for i, ch in enumerate(chunks):
+        session.add_chunk(i, str(ch))
+    # peak=1.0: ya no medimos nivel; si las transcripciones salen vacías avisa "sin voz".
+    session.finish(len(chunks), 1.0, title, data.get("notes", ""), ctype, "", str(p))
+    return jsonify({"status": "processing"})
 
 
 if __name__ == "__main__":

@@ -210,16 +210,16 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 - La **transcripción se guarda igual**, con un aviso de que el resumen falló. En el
   panel, abrí la nota y tocá **"↻ Regenerar resumen"** para reintentar (también sirve
   si querés un resumen distinto). La llamada ahora reintenta sola ante cortes breves.
-- Si la nota no llegó a guardarse (versión vieja, o cerraste la app), los `.wav`
-  siguen en `recordings/meeting-<fecha>/`. Recuperala desde ahí sin re-grabar:
+- Si la nota no llegó a guardarse (versión vieja, o cerraste la app), el audio sigue
+  en `recordings/meeting-<fecha>/`. En el panel, esas grabaciones aparecen abajo en
+  **"Sin procesar"** con un botón **"Recuperar"**, que las re-transcribe y resume sin
+  re-grabar. (También podés hacerlo por consola, útil si la app no abre:)
 
   ```bash
   python recover.py                          # usa la grabación más reciente
   python recover.py recordings/meeting-XXXX  # una carpeta puntual
   python recover.py --title "Reunión semanal" --type reunion
   ```
-
-  Re-transcribe los segmentos, regenera el resumen y la guarda en el historial.
 
 ---
 

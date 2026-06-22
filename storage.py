@@ -93,6 +93,14 @@ def update_summary(note_id, summary) -> bool:
     return True
 
 
+def used_audio_dirs() -> set:
+    """Carpetas de audio que ya tienen una nota asociada (para no re-procesarlas)."""
+    c = _conn()
+    rows = c.execute("SELECT audio_dir FROM notes WHERE audio_dir IS NOT NULL").fetchall()
+    c.close()
+    return {r[0] for r in rows if r[0]}
+
+
 def list_notes() -> list:
     c = _conn()
     rows = c.execute(
