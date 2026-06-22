@@ -229,6 +229,13 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 
 ## Configuración (`.env`)
 
+> Desde la app también podés configurar casi todo sin tocar archivos: botón
+> **⚙ Configuración** (barra lateral). Permite elegir el **dispositivo de audio**
+> (con un botón **▶ Probar** que graba 3 s y te dice si entra señal), el **modelo de
+> Claude** y de **Whisper**, la duración de segmento y las credenciales de **Notion**.
+> Los cambios se aplican en vivo (sin reiniciar) y se guardan en `settings.json`.
+> El `.env` sigue funcionando como valores por defecto.
+
 | Variable | Para qué |
 |---|---|
 | `ANTHROPIC_API_KEY` | Tu clave de la API de Claude |

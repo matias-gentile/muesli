@@ -12,9 +12,11 @@ from pathlib import Path
 import sounddevice as sd
 from flask import Flask, Response, jsonify, render_template, request
 
+import config
 import storage
-from audio_capture import ChunkedRecorder
-from config import AUDIO_DEVICE_NAME, AUDIO_DEVICE_OUTPUT_ONLY, CHUNK_SECONDS, RECORDINGS_DIR
+import transcribe
+from audio_capture import ChunkedRecorder, record_test
+from config import RECORDINGS_DIR
 from session import Session
 from summarize import list_templates, summarize, type_label
 
@@ -32,12 +34,45 @@ def index():
 def devices():
     out = [{"index": i, "name": d["name"], "channels": d["max_input_channels"]}
            for i, d in enumerate(sd.query_devices()) if d["max_input_channels"] > 0]
-    return jsonify({"configured": AUDIO_DEVICE_NAME, "devices": out})
+    return jsonify({"configured": config.get("AUDIO_DEVICE_NAME"), "devices": out})
 
 
 @app.route("/api/templates")
 def templates():
     return jsonify(list_templates())
+
+
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    out = {}
+    for k, v in config.get_all().items():
+        if k in config.SECRET_KEYS:
+            out[k] = ""                 # nunca devolvemos el secreto en claro
+            out[k + "_set"] = bool(v)    # solo si está configurado
+        else:
+            out[k] = v
+    return jsonify(out)
+
+
+@app.route("/api/settings", methods=["POST"])
+def post_settings():
+    data = request.get_json(silent=True) or {}
+    config.update(data)
+    transcribe.reset_model()  # por si cambió el modelo de Whisper
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/test-audio", methods=["POST"])
+def test_audio():
+    if recorder is not None and recorder.recording:
+        return jsonify({"ok": False, "error": "Hay una grabación en curso."}), 400
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "full")
+    device = config.get("AUDIO_DEVICE_OUTPUT_ONLY") if mode == "output" else config.get("AUDIO_DEVICE_NAME")
+    try:
+        return jsonify(record_test(device, seconds=3.0))
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 
 @app.route("/api/start", methods=["POST"])
@@ -49,12 +84,12 @@ def start():
     data = request.get_json(silent=True) or {}
     # "full" = salida del sistema + micrófono; "output" = solo salida del sistema.
     mode = data.get("mode", "full")
-    device = AUDIO_DEVICE_OUTPUT_ONLY if mode == "output" else AUDIO_DEVICE_NAME
+    device = config.get("AUDIO_DEVICE_OUTPUT_ONLY") if mode == "output" else config.get("AUDIO_DEVICE_NAME")
 
     try:
         session = Session()
         recorder = ChunkedRecorder(device_name=device, on_chunk=session.add_chunk,
-                                   chunk_seconds=CHUNK_SECONDS)
+                                   chunk_seconds=config.get_int("CHUNK_SECONDS", 600))
         recorder.start()
     except Exception as e:  # dispositivo no encontrado, permisos, etc.
         return jsonify({"error": str(e)}), 400

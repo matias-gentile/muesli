@@ -7,7 +7,7 @@ estructurado en Markdown, adaptado al contexto. Es el equivalente a las
 """
 from anthropic import Anthropic
 
-from config import CLAUDE_MODEL
+import config
 
 BASE_SYSTEM = """Eres un asistente experto en sintetizar lo que ocurre en una \
 grabación de audio transcrita automáticamente. Recibes:
@@ -187,12 +187,13 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     parts.append("\n=== TRANSCRIPCIÓN AUTOMÁTICA ===\n" + (transcript.strip() or "(transcripción vacía)"))
     user_content = "\n".join(parts)
 
-    client = Anthropic(max_retries=4, timeout=180)  # reintenta cortes de red transitorios
+    client = Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
+                       max_retries=4, timeout=180)  # reintenta cortes de red transitorios
     messages = [{"role": "user", "content": user_content}]
     full = ""
     for _ in range(5):  # si la respuesta se corta por longitud, la continúa
         message = client.messages.create(
-            model=CLAUDE_MODEL,
+            model=config.get("CLAUDE_MODEL"),
             max_tokens=max_tokens,
             system=system,
             messages=messages,

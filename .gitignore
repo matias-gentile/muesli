@@ -15,3 +15,6 @@ notes.db
 
 # Caché de modelos de Whisper
 models/
+
+# Configuración guardada desde el panel (puede tener tokens)
+settings.json

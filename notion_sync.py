@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import re
 
-from config import NOTION_API_KEY, NOTION_DATABASE_ID
+import config
 
 
 def is_enabled() -> bool:
-    return bool(NOTION_API_KEY and NOTION_DATABASE_ID)
+    return bool(config.get("NOTION_API_KEY") and config.get("NOTION_DATABASE_ID"))
 
 
 def _rich_text(text: str):
@@ -78,8 +78,9 @@ def sync(title: str, summary: str, type_label: str = "", created_iso: str = "") 
 
     from notion_client import Client  # import perezoso: solo si Notion está activo
 
-    client = Client(auth=NOTION_API_KEY)
-    db = client.databases.retrieve(database_id=NOTION_DATABASE_ID)
+    db_id = config.get("NOTION_DATABASE_ID")
+    client = Client(auth=config.get("NOTION_API_KEY"))
+    db = client.databases.retrieve(database_id=db_id)
 
     # Notion tiene dos formas de API:
     #  - vieja (2022-06-28): las propiedades vienen en database["properties"];
@@ -93,7 +94,7 @@ def sync(title: str, summary: str, type_label: str = "", created_iso: str = "") 
         parent = {"type": "data_source_id", "data_source_id": ds_id}
     else:
         schema = db.get("properties", {})
-        parent = {"database_id": NOTION_DATABASE_ID}
+        parent = {"database_id": db_id}
 
     # Encuentra el nombre real de la propiedad de título (robusto al idioma).
     title_prop = next((k for k, v in schema.items() if v.get("type") == "title"), None)
