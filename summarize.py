@@ -188,15 +188,25 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     user_content = "\n".join(parts)
 
     client = Anthropic(max_retries=4, timeout=180)  # reintenta cortes de red transitorios
-    message = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user_content}],
-    )
-    return "".join(
-        b.text for b in message.content if getattr(b, "type", None) == "text"
-    ).strip()
+    messages = [{"role": "user", "content": user_content}]
+    full = ""
+    for _ in range(5):  # si la respuesta se corta por longitud, la continúa
+        message = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=max_tokens,
+            system=system,
+            messages=messages,
+        )
+        part = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
+        full += part
+        if getattr(message, "stop_reason", None) != "max_tokens":
+            break  # terminó normalmente
+        # se cortó por el tope: pedile que siga desde donde quedó
+        messages.append({"role": "assistant", "content": part})
+        messages.append({"role": "user",
+                         "content": "Seguí el resumen exactamente desde donde se cortó, sin "
+                                    "repetir lo ya escrito ni reabrir secciones ya cerradas."})
+    return full.strip()
 
 
 if __name__ == "__main__":
