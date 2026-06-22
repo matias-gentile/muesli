@@ -63,6 +63,14 @@ def _md_to_blocks(md: str):
     return blocks
 
 
+def _retrieve_data_source(client, ds_id):
+    """Trae un data source (API nueva). Usa el método tipado si existe, si no el crudo."""
+    ds_api = getattr(client, "data_sources", None)
+    if ds_api is not None and hasattr(ds_api, "retrieve"):
+        return ds_api.retrieve(data_source_id=ds_id)
+    return client.request(path=f"data_sources/{ds_id}", method="GET")
+
+
 def sync(title: str, summary: str, type_label: str = "", created_iso: str = "") -> str | None:
     """Crea la página en Notion y devuelve su URL. None si Notion está desactivado."""
     if not is_enabled():
@@ -71,10 +79,24 @@ def sync(title: str, summary: str, type_label: str = "", created_iso: str = "") 
     from notion_client import Client  # import perezoso: solo si Notion está activo
 
     client = Client(auth=NOTION_API_KEY)
-    schema = client.databases.retrieve(database_id=NOTION_DATABASE_ID)["properties"]
+    db = client.databases.retrieve(database_id=NOTION_DATABASE_ID)
+
+    # Notion tiene dos formas de API:
+    #  - vieja (2022-06-28): las propiedades vienen en database["properties"];
+    #  - nueva (data sources): la base trae "data_sources" y las propiedades viven
+    #    en el data source. Soportamos ambas para no romper según la versión de la lib.
+    sources = db.get("data_sources") or []
+    if sources:
+        ds_id = sources[0]["id"]
+        ds = _retrieve_data_source(client, ds_id)
+        schema = ds.get("properties", {})
+        parent = {"type": "data_source_id", "data_source_id": ds_id}
+    else:
+        schema = db.get("properties", {})
+        parent = {"database_id": NOTION_DATABASE_ID}
 
     # Encuentra el nombre real de la propiedad de título (robusto al idioma).
-    title_prop = next((k for k, v in schema.items() if v["type"] == "title"), None)
+    title_prop = next((k for k, v in schema.items() if v.get("type") == "title"), None)
     properties = {}
     if title_prop:
         properties[title_prop] = {
@@ -87,7 +109,7 @@ def sync(title: str, summary: str, type_label: str = "", created_iso: str = "") 
         properties["Fecha"] = {"date": {"start": created_iso}}
 
     page = client.pages.create(
-        parent={"database_id": NOTION_DATABASE_ID},
+        parent=parent,
         properties=properties,
         children=_md_to_blocks(summary)[:100],  # Notion permite 100 bloques por request
     )
