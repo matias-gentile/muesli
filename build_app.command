@@ -104,6 +104,15 @@ fi
 LAUNCH
 chmod +x "$APP/Contents/MacOS/Muesli"
 
+# 4c) Firma ad-hoc: le da una identidad estable al bundle para que macOS pueda pedirte
+#     el permiso de micrófono y atribuirlo a "Muesli" (sin firmar, el diálogo puede no
+#     aparecer). No requiere cuenta de desarrollador.
+if codesign --force --sign - "$APP" >/dev/null 2>&1; then
+  echo "✓ Firmado (ad-hoc)"
+else
+  echo "⚠ No se pudo firmar con codesign; el permiso de micrófono podría no pedirse solo."
+fi
+
 # 5) Refrescamos el registro de LaunchServices (para que Finder lo tome enseguida).
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
   -f "$APP" >/dev/null 2>&1 || true

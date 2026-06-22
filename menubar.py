@@ -207,6 +207,11 @@ class MuesliBar(rumps.App):
 
 
 def main():
+    # Pedí permiso de micrófono apenas arranca (si no, los dispositivos de entrada
+    # aparecen con 0 canales y no se ven). Mostrá el diálogo del sistema temprano.
+    from mic_permission import request_microphone_access
+    request_microphone_access()
+
     threading.Thread(target=start_flask, daemon=True).start()
     # esperá a que Flask responda (hasta ~5 s) antes de mostrar la barra
     for _ in range(50):

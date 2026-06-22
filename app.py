@@ -267,5 +267,9 @@ def recover():
 
 
 if __name__ == "__main__":
+    # Pedí permiso de micrófono al iniciar (sin esto, los dispositivos de entrada
+    # pueden aparecer con 0 canales hasta concederlo).
+    from mic_permission import request_microphone_access
+    request_microphone_access()
     # Puerto 5001 para evitar el conflicto con AirPlay (5000) en macOS.
     app.run(debug=True, port=5001)

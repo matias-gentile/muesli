@@ -219,12 +219,14 @@ Detalles:
 - Como lo generás vos mismo en tu Mac, **no aparece la alerta de Gatekeeper** de apps de
   desarrolladores no identificados.
 - ¿No abre nada al doble clic? Mirá el log en **`~/Library/Logs/Muesli.log`**.
-- **`incompatible architecture (have 'arm64', need 'x86_64')`** al importar
-  `sounddevice`/`_cffi_backend`: tus paquetes son arm64 (nativo de Apple Silicon) pero el
-  `.app` arrancó Python en x86_64 (Rosetta). El `build_app.command` ya **fuerza la
-  arquitectura nativa** al lanzar para evitarlo; si lo ves, hacé `git pull` y volvé a
-  correr `./build_app.command`. (Verificá en Terminal con:
-  `arch -arm64 .venv/bin/python3 -c "import sounddevice; print('ok')"`.)
+- **No aparece ningún micrófono / la lista de dispositivos está vacía** (en
+  `http://localhost:5001/api/devices` ves `"devices": []`): es el **permiso de
+  micrófono**. En macOS reciente, hasta que lo concedés, los dispositivos de entrada se
+  reportan con 0 canales y no aparecen. La app ahora **pide el permiso al arrancar** y el
+  `.app` se **firma (ad-hoc)** para que macOS muestre el diálogo y lo atribuya a *Muesli*.
+  Si lo ves: `git pull`, `pip install -r requirements.txt` (suma una dependencia de
+  macOS), `./build_app.command`, reabrí Muesli y dale **Permitir** al diálogo de
+  micrófono (o activalo en Ajustes → Privacidad y seguridad → Micrófono).
 - Si **movés la carpeta** del proyecto, volvé a correr `build_app.command` (el `.app`
   guarda la ruta absoluta).
 - Podés arrastrar `Muesli.app` a **Aplicaciones**, y/o agregarlo a **Ajustes → General →

@@ -10,3 +10,4 @@ notion-client>=2.2.1
 # Solo para la app de barra de menú de macOS (python menubar.py):
 rumps>=0.4.0 ; sys_platform == "darwin"
 pywebview>=5.0 ; sys_platform == "darwin"   # opcional: integración con Notion
+pyobjc-framework-AVFoundation>=9.0 ; sys_platform == "darwin"   # pedir permiso de micrófono
