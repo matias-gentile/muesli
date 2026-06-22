@@ -117,7 +117,7 @@ class Session:
                            f"guardada — podés regenerar el resumen desde el panel._")
 
             note = storage.save_note(self.title, transcript, summary,
-                                     self.manual_notes, self.audio_dir)
+                                     self.manual_notes, self.audio_dir, self.context_type)
 
             notion_url, notion_error = None, None
             if summary_error is None and notion_sync.is_enabled():

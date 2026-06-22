@@ -18,13 +18,16 @@ def _conn():
             transcript TEXT,
             summary TEXT,
             manual_notes TEXT,
-            audio_dir TEXT
+            audio_dir TEXT,
+            ctype TEXT
         )"""
     )
-    # Migración para bases viejas: agrega audio_dir si falta.
+    # Migración para bases viejas: agrega columnas nuevas si faltan.
     cols = [r[1] for r in c.execute("PRAGMA table_info(notes)").fetchall()]
     if "audio_dir" not in cols:
         c.execute("ALTER TABLE notes ADD COLUMN audio_dir TEXT")
+    if "ctype" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN ctype TEXT")
     c.commit()
     return c
 
@@ -45,7 +48,7 @@ def _render_md(title, created, summary, manual_notes, transcript) -> str:
     )
 
 
-def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> dict:
+def save_note(title, transcript, summary, manual_notes="", audio_dir=None, ctype=None) -> dict:
     created = datetime.datetime.now()
     title = (title or "").strip() or "Reunión"
     fname = f"{created.strftime('%Y%m%d-%H%M%S')}-{_slugify(title)}.md"
@@ -55,17 +58,17 @@ def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> di
 
     c = _conn()
     cur = c.execute(
-        "INSERT INTO notes (title, created_at, path, transcript, summary, manual_notes, audio_dir) "
-        "VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO notes (title, created_at, path, transcript, summary, manual_notes, audio_dir, ctype) "
+        "VALUES (?,?,?,?,?,?,?,?)",
         (title, created.isoformat(), str(path), transcript, summary, manual_notes,
-         str(audio_dir) if audio_dir else None),
+         str(audio_dir) if audio_dir else None, ctype),
     )
     c.commit()
     note_id = cur.lastrowid
     c.close()
     return {
         "id": note_id, "title": title, "created_at": created.isoformat(),
-        "path": str(path), "summary": summary,
+        "path": str(path), "summary": summary, "ctype": ctype,
     }
 
 
@@ -112,16 +115,16 @@ def used_audio_dirs() -> set:
 def list_notes() -> list:
     c = _conn()
     rows = c.execute(
-        "SELECT id, title, created_at FROM notes ORDER BY created_at DESC"
+        "SELECT id, title, created_at, ctype FROM notes ORDER BY created_at DESC"
     ).fetchall()
     c.close()
-    return [{"id": r[0], "title": r[1], "created_at": r[2]} for r in rows]
+    return [{"id": r[0], "title": r[1], "created_at": r[2], "ctype": r[3]} for r in rows]
 
 
 def get_note(note_id: int):
     c = _conn()
     r = c.execute(
-        "SELECT id, title, created_at, path, transcript, summary, manual_notes "
+        "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype "
         "FROM notes WHERE id=?",
         (note_id,),
     ).fetchone()
@@ -130,8 +133,17 @@ def get_note(note_id: int):
         return None
     return {
         "id": r[0], "title": r[1], "created_at": r[2], "path": r[3],
-        "transcript": r[4], "summary": r[5], "manual_notes": r[6],
+        "transcript": r[4], "summary": r[5], "manual_notes": r[6], "ctype": r[7],
     }
+
+
+def note_markdown(note_id: int):
+    """Reconstruye el Markdown de una nota desde la DB (para exportar/descargar)."""
+    n = get_note(note_id)
+    if not n:
+        return None
+    created = datetime.datetime.fromisoformat(n["created_at"])
+    return _render_md(n["title"], created, n["summary"], n["manual_notes"], n["transcript"])
 
 
 def delete_note(note_id: int) -> bool:

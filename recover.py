@@ -72,7 +72,7 @@ def main():
         summary = (f"_El resumen automático falló ({e}). La transcripción está guardada — "
                    f"regenerá el resumen desde el panel._")
 
-    note = storage.save_note(title, transcript, summary, args.notes, str(folder))
+    note = storage.save_note(title, transcript, summary, args.notes, str(folder), args.ctype)
     print(f"\n✓ Guardado: {note['path']}")
 
     if notion_sync.is_enabled() and not summary.startswith("_El resumen"):

@@ -101,6 +101,21 @@
   }
   .note-item:hover .note-del{opacity:.7;}
   .note-del:hover{opacity:1; color:var(--rec); background:var(--surface-3);}
+  .search{
+    width:100%; padding:8px 11px; border-radius:9px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:13px; margin:2px 0 8px; outline:none;
+    box-sizing:border-box;
+  }
+  .search:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);}
+  .group-head{
+    font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint);
+    font-weight:700; margin:14px 0 5px 3px;
+  }
+  .group-head:first-child{margin-top:2px;}
+  .type-badge{
+    display:inline-block; font-size:10px; font-weight:600; padding:1px 7px; border-radius:999px;
+    background:var(--surface-3); color:var(--text-dim); margin-left:5px; vertical-align:middle;
+  }
   .recover-item{
     display:flex; align-items:center; gap:8px; padding:9px 10px; margin-top:4px;
     border-radius:10px; border:1px dashed var(--border); background:var(--surface);
@@ -262,7 +277,7 @@
   .edit-btn{
     padding:8px 14px; border-radius:9px; cursor:pointer;
     background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim);
-    font-size:13px; font-weight:600;
+    font-size:13px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center;
     transition:background .12s ease, border-color .12s ease;
   }
   .edit-btn:hover{background:var(--surface-3); border-color:var(--text-faint);}
@@ -319,6 +334,7 @@
     <div class="wordmark"><span class="seed"></span><h1>Muesli</h1></div>
     <div class="side-section">
       <div class="eyebrow">Grabaciones</div>
+      <input id="search" class="search" placeholder="Buscar reuniones…" oninput="renderList(this.value)" />
       <div id="list"></div>
     </div>
     <div id="recoverable" class="side-section"></div>
@@ -368,6 +384,7 @@ let activeId = null;
 let audioMode = "full";  // "full" = salida + micrófono, "output" = solo salida
 let levelTimer = null, lastPartialLen = -1;
 let curSummary = "";  // resumen crudo de la nota abierta (para editar)
+let allNotes = [], templateLabels = {};  // cache de la lista + value->label de tipos
 
 document.querySelectorAll("#audioMode .seg-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -581,7 +598,9 @@ function render(o) {
     summaryWarn = `<div class="notion-warn">⚠️ El resumen falló: ${(o.summaryError).replace(/</g, "&lt;")}. La transcripción está guardada — probá "↻ Regenerar".</div>`;
   }
   const actions = noteId ? `<div class="note-actions">
-        <button class="edit-btn" onclick="editSummary(${noteId})">✎ Editar resumen</button>
+        <button class="edit-btn" onclick="copySummary()">⧉ Copiar</button>
+        <a class="edit-btn" href="/api/notes/${noteId}/download" download>⤓ .md</a>
+        <button class="edit-btn" onclick="editSummary(${noteId})">✎ Editar</button>
         <button class="regen-btn" onclick="resummarize(${noteId})">↻ Regenerar</button>
       </div>` : "";
   document.getElementById("result").innerHTML = `
@@ -633,26 +652,92 @@ async function saveTitle(id, value) {
   } catch (e) {}
 }
 
+function copySummary() {
+  const text = curSummary || "";
+  const done = () => setStatus("✓ Resumen copiado al portapapeles.");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, cb) {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); if (cb) cb(); }
+  catch (e) { setStatus("⚠️ No se pudo copiar."); }
+  document.body.removeChild(ta);
+}
+
 async function loadTemplates() {
   const r = await fetch("/api/templates");
   const tpls = await r.json();
+  templateLabels = {};
+  tpls.forEach(t => { templateLabels[t.value] = t.label; });
   document.getElementById("ctype").innerHTML =
     tpls.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
 }
 
 async function loadList() {
   const r = await fetch("/api/notes");
-  const items = await r.json();
-  const list = document.getElementById("list");
-  if (!items.length) { list.innerHTML = '<div class="hint">Todavía no grabaste nada. Dale a Grabar para empezar.</div>'; return; }
-  list.innerHTML = items.map(n => `
-    <div class="note-item ${n.id === activeId ? "active" : ""}" onclick="openNote(${n.id})">
+  allNotes = await r.json();
+  renderList(document.getElementById("search").value);
+}
+
+function compactDate(iso) {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
+  const hh = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  return dd + " " + hh;
+}
+
+function bucketOf(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const that = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = Math.round((today - that) / 86400000);
+  if (diff <= 0) return "Hoy";
+  if (diff === 1) return "Ayer";
+  if (diff < 7) return "Últimos 7 días";
+  if (diff < 30) return "Últimas semanas";
+  return "Más antiguas";
+}
+
+function noteItemHtml(n) {
+  const label = templateLabels[n.ctype];
+  const badge = label ? `<span class="type-badge">${label}</span>` : "";
+  return `<div class="note-item ${n.id === activeId ? "active" : ""}" onclick="openNote(${n.id})">
       <div class="note-main">
         <div class="t">${(n.title || "Sin título").replace(/</g, "&lt;")}</div>
-        <div class="d">${new Date(n.created_at).toLocaleString("es")}</div>
+        <div class="d">${compactDate(n.created_at)} ${badge}</div>
       </div>
       <button class="note-del" title="Borrar" onclick="deleteNote(event, ${n.id})">✕</button>
-    </div>`).join("");
+    </div>`;
+}
+
+function renderList(q) {
+  q = (q || "").toLowerCase().trim();
+  const list = document.getElementById("list");
+  let items = allNotes;
+  if (q) items = items.filter(n => (n.title || "").toLowerCase().includes(q));
+  if (!items.length) {
+    list.innerHTML = q
+      ? '<div class="hint">Sin resultados.</div>'
+      : '<div class="hint">Todavía no grabaste nada. Dale a Grabar para empezar.</div>';
+    return;
+  }
+  const order = ["Hoy", "Ayer", "Últimos 7 días", "Últimas semanas", "Más antiguas"];
+  const groups = {};
+  items.forEach(n => { const b = bucketOf(n.created_at); (groups[b] = groups[b] || []).push(n); });
+  let html = "";
+  order.forEach(b => {
+    if (!groups[b]) return;
+    html += `<div class="group-head">${b}</div>` + groups[b].map(noteItemHtml).join("");
+  });
+  list.innerHTML = html;
 }
 
 async function openNote(id) {

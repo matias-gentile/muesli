@@ -143,9 +143,10 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
    en segundos, no después de una hora) y la **transcripción en vivo** a medida que se
    completan los segmentos. Anotá lo que te importa en el área de notas — guían el resumen.
 6. **Detener y resumir**. La app transcribe, resume con Claude según el tipo y guarda.
-7. El resumen aparece en pantalla. Podés **renombrar** la reunión (clic en el título)
-   o **editar el resumen** a mano (botón ✎). Las grabaciones quedan en la barra lateral
-   y como `.md` en `notes/`.
+7. El resumen aparece en pantalla. Podés **renombrar** la reunión (clic en el título),
+   **editar el resumen** (✎), **copiarlo** (⧉) o **descargarlo** como `.md` (⤓). En la
+   barra lateral, las reuniones se **agrupan por día**, muestran su **tipo** y se pueden
+   **buscar** por título. Todo queda también como `.md` en `notes/`.
 
 ---
 

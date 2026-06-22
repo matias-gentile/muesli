@@ -6,10 +6,11 @@ segundo plano; /api/stop devuelve enseguida y el frontend consulta /api/status.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import sounddevice as sd
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 import storage
 from audio_capture import ChunkedRecorder
@@ -146,6 +147,17 @@ def resummarize(note_id):
 
     storage.update_summary(note_id, summary)
     return jsonify({"summary": summary, "id": note_id})
+
+
+@app.route("/api/notes/<int:note_id>/download")
+def download_note(note_id):
+    md = storage.note_markdown(note_id)
+    if md is None:
+        return jsonify({"error": "not_found"}), 404
+    n = storage.get_note(note_id)
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", (n.get("title") or "reunion")).strip("-") or "reunion"
+    return Response(md, mimetype="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}.md"'})
 
 
 @app.route("/api/recoverable")
