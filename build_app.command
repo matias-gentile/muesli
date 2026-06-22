@@ -52,6 +52,17 @@ case "$PROJECT_DIR/" in
     ;;
 esac
 
+# 3c) Arquitectura nativa del hardware. La forzamos al lanzar para que Python use la
+#     MISMA arquitectura con la que se instalaron los paquetes del venv. Si no, al abrir
+#     desde el .app macOS puede arrancar Python en x86_64 (Rosetta) y fallar con
+#     "incompatible architecture (have 'arm64', need 'x86_64')".
+if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+  NATIVE_ARCH="arm64"
+else
+  NATIVE_ARCH="x86_64"
+fi
+echo "Arquitectura nativa: $NATIVE_ARCH"
+
 # 4) Armamos el bundle .app en el Escritorio.
 APP="$HOME/Desktop/Muesli.app"
 echo "Creando $APP ..."
@@ -82,7 +93,14 @@ PLIST
 cat > "$APP/Contents/MacOS/Muesli" <<LAUNCH
 #!/bin/bash
 cd "$PROJECT_DIR"
-exec "$PYBIN" menubar.py >> "\$HOME/Library/Logs/Muesli.log" 2>&1
+LOG="\$HOME/Library/Logs/Muesli.log"
+# Forzamos la arquitectura nativa ($NATIVE_ARCH) para que coincida con los paquetes
+# del venv; si esa arquitectura no estuviera disponible, caemos al lanzamiento normal.
+if /usr/bin/arch -$NATIVE_ARCH /usr/bin/true 2>/dev/null; then
+  exec /usr/bin/arch -$NATIVE_ARCH "$PYBIN" menubar.py >> "\$LOG" 2>&1
+else
+  exec "$PYBIN" menubar.py >> "\$LOG" 2>&1
+fi
 LAUNCH
 chmod +x "$APP/Contents/MacOS/Muesli"
 
