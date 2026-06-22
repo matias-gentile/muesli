@@ -1,6 +1,8 @@
 """Persistencia: guarda cada reunión como Markdown y la indexa en SQLite."""
 import datetime
+import shutil
 import sqlite3
+from pathlib import Path
 
 from config import NOTES_DIR, DB_PATH
 
@@ -15,9 +17,15 @@ def _conn():
             path TEXT,
             transcript TEXT,
             summary TEXT,
-            manual_notes TEXT
+            manual_notes TEXT,
+            audio_dir TEXT
         )"""
     )
+    # Migración para bases viejas: agrega audio_dir si falta.
+    cols = [r[1] for r in c.execute("PRAGMA table_info(notes)").fetchall()]
+    if "audio_dir" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN audio_dir TEXT")
+    c.commit()
     return c
 
 
@@ -26,9 +34,9 @@ def _slugify(title: str) -> str:
     return safe.replace(" ", "-") or "reunion"
 
 
-def save_note(title: str, transcript: str, summary: str, manual_notes: str = "") -> dict:
+def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> dict:
     created = datetime.datetime.now()
-    title = title.strip() or "Reunión"
+    title = (title or "").strip() or "Reunión"
     fname = f"{created.strftime('%Y%m%d-%H%M%S')}-{_slugify(title)}.md"
     path = NOTES_DIR / fname
 
@@ -37,26 +45,24 @@ def save_note(title: str, transcript: str, summary: str, manual_notes: str = "")
         f"_{created.strftime('%Y-%m-%d %H:%M')}_\n\n"
         f"{summary}\n\n"
         f"---\n\n"
-        f"## Mis notas\n\n{manual_notes.strip() or '_(sin notas manuales)_'}\n\n"
-        f"## Transcripción completa\n\n{transcript.strip() or '_(vacía)_'}\n"
+        f"## Mis notas\n\n{(manual_notes or '').strip() or '_(sin notas manuales)_'}\n\n"
+        f"## Transcripción completa\n\n{(transcript or '').strip() or '_(vacía)_'}\n"
     )
     path.write_text(md, encoding="utf-8")
 
     c = _conn()
     cur = c.execute(
-        "INSERT INTO notes (title, created_at, path, transcript, summary, manual_notes) "
-        "VALUES (?,?,?,?,?,?)",
-        (title, created.isoformat(), str(path), transcript, summary, manual_notes),
+        "INSERT INTO notes (title, created_at, path, transcript, summary, manual_notes, audio_dir) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (title, created.isoformat(), str(path), transcript, summary, manual_notes,
+         str(audio_dir) if audio_dir else None),
     )
     c.commit()
     note_id = cur.lastrowid
     c.close()
     return {
-        "id": note_id,
-        "title": title,
-        "created_at": created.isoformat(),
-        "path": str(path),
-        "summary": summary,
+        "id": note_id, "title": title, "created_at": created.isoformat(),
+        "path": str(path), "summary": summary,
     }
 
 
@@ -83,3 +89,25 @@ def get_note(note_id: int):
         "id": r[0], "title": r[1], "created_at": r[2], "path": r[3],
         "transcript": r[4], "summary": r[5], "manual_notes": r[6],
     }
+
+
+def delete_note(note_id: int) -> bool:
+    """Borra la nota: fila en la DB, su .md y la carpeta de audio (best-effort)."""
+    c = _conn()
+    row = c.execute("SELECT path, audio_dir FROM notes WHERE id=?", (note_id,)).fetchone()
+    if not row:
+        c.close()
+        return False
+    md_path, audio_dir = row
+    c.execute("DELETE FROM notes WHERE id=?", (note_id,))
+    c.commit()
+    c.close()
+
+    if md_path:
+        try:
+            Path(md_path).unlink()
+        except OSError:
+            pass
+    if audio_dir:
+        shutil.rmtree(audio_dir, ignore_errors=True)
+    return True

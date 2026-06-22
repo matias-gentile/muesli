@@ -29,6 +29,7 @@ class Session:
         self.manual_notes = ""
         self.context_type = "reunion"
         self.context = ""
+        self.audio_dir = None
         self._transcripts: dict[int, str] = {}
         self._lock = threading.Lock()
         self._queue: "queue.Queue" = queue.Queue()
@@ -40,7 +41,7 @@ class Session:
         """Encola un chunk recién cerrado para transcribir (FIFO, en orden)."""
         self._queue.put((index, str(path)))
 
-    def finish(self, total_chunks, peak, title, manual_notes, context_type, context):
+    def finish(self, total_chunks, peak, title, manual_notes, context_type, context, audio_dir=None):
         """Señala que la grabación terminó; dispara el resumen final."""
         with self._lock:
             self.total_chunks = total_chunks
@@ -49,6 +50,7 @@ class Session:
             self.manual_notes = manual_notes
             self.context_type = context_type
             self.context = context
+            self.audio_dir = audio_dir
         self._queue.put(None)  # centinela: no hay más chunks
 
     def snapshot(self):
@@ -99,7 +101,8 @@ class Session:
             self._set(status="summarizing")
             summary = summarize(transcript, self.manual_notes, self.title,
                                 self.context_type, self.context)
-            note = storage.save_note(self.title, transcript, summary, self.manual_notes)
+            note = storage.save_note(self.title, transcript, summary,
+                                     self.manual_notes, self.audio_dir)
 
             notion_url, notion_error = None, None
             if notion_sync.is_enabled():

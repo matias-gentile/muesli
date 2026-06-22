@@ -82,6 +82,7 @@
   .note-item{
     padding:11px 12px; border-radius:10px; cursor:pointer;
     border:1px solid transparent; position:relative;
+    display:flex; align-items:flex-start; gap:8px;
     transition:background .15s ease, border-color .15s ease, box-shadow .15s ease;
   }
   .note-item:hover{background:var(--surface); box-shadow:var(--shadow-sm);}
@@ -92,6 +93,14 @@
   }
   .note-item .t{font-size:14px; font-weight:500; line-height:1.3; color:var(--text);}
   .note-item .d{font-size:12px; color:var(--text-faint); margin-top:3px;}
+  .note-main{flex:1; min-width:0;}
+  .note-del{
+    flex-shrink:0; border:none; background:transparent; color:var(--text-faint);
+    cursor:pointer; font-size:13px; line-height:1; padding:3px 5px; border-radius:6px;
+    opacity:0; transition:opacity .12s ease, color .12s ease, background .12s ease;
+  }
+  .note-item:hover .note-del{opacity:.7;}
+  .note-del:hover{opacity:1; color:var(--rec); background:var(--surface-3);}
 
   /* Main */
   main{position:relative; z-index:1; padding:34px 44px 64px; overflow-y:auto; max-width:940px;}
@@ -449,8 +458,11 @@ async function loadList() {
   if (!items.length) { list.innerHTML = '<div class="hint">Todavía no grabaste nada. Dale a Grabar para empezar.</div>'; return; }
   list.innerHTML = items.map(n => `
     <div class="note-item ${n.id === activeId ? "active" : ""}" onclick="openNote(${n.id})">
-      <div class="t">${(n.title || "Sin título").replace(/</g, "&lt;")}</div>
-      <div class="d">${new Date(n.created_at).toLocaleString("es")}</div>
+      <div class="note-main">
+        <div class="t">${(n.title || "Sin título").replace(/</g, "&lt;")}</div>
+        <div class="d">${new Date(n.created_at).toLocaleString("es")}</div>
+      </div>
+      <button class="note-del" title="Borrar" onclick="deleteNote(event, ${n.id})">✕</button>
     </div>`).join("");
 }
 
@@ -460,6 +472,20 @@ async function openNote(id) {
   const n = await r.json();
   setStatus("");
   render(n.summary, n.transcript);
+  await loadList();
+}
+
+async function deleteNote(event, id) {
+  event.stopPropagation();
+  if (!confirm("¿Borrar esta grabación? No se puede deshacer (también borra el audio guardado).")) return;
+  try {
+    await fetch("/api/notes/" + id, { method: "DELETE" });
+  } catch (e) {}
+  if (activeId === id) {
+    activeId = null;
+    document.getElementById("result").innerHTML = "";
+    setStatus("");
+  }
   await loadList();
 }
 

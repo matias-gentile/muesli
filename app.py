@@ -67,7 +67,8 @@ def stop():
     total = recorder.stop()  # finaliza el último chunk; los chunks ya fueron encolados
     session.finish(total, recorder.peak,
                    data.get("title", ""), data.get("notes", ""),
-                   data.get("context_type", "reunion"), data.get("context", ""))
+                   data.get("context_type", "reunion"), data.get("context", ""),
+                   str(recorder.session_dir))
     return jsonify({"status": "processing"})
 
 
@@ -89,6 +90,13 @@ def note(note_id):
     if not n:
         return jsonify({"error": "not_found"}), 404
     return jsonify(n)
+
+
+@app.route("/api/notes/<int:note_id>", methods=["DELETE"])
+def delete_note(note_id):
+    if not storage.delete_note(note_id):
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"status": "deleted", "id": note_id})
 
 
 if __name__ == "__main__":
