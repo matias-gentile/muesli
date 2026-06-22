@@ -12,7 +12,7 @@ import storage
 from audio_capture import ChunkedRecorder
 from config import AUDIO_DEVICE_NAME, AUDIO_DEVICE_OUTPUT_ONLY, CHUNK_SECONDS
 from session import Session
-from summarize import list_templates
+from summarize import list_templates, summarize, type_label
 
 app = Flask(__name__)
 recorder: ChunkedRecorder | None = None
@@ -97,6 +97,26 @@ def delete_note(note_id):
     if not storage.delete_note(note_id):
         return jsonify({"error": "not_found"}), 404
     return jsonify({"status": "deleted", "id": note_id})
+
+
+@app.route("/api/notes/<int:note_id>/resummarize", methods=["POST"])
+def resummarize(note_id):
+    n = storage.get_note(note_id)
+    if not n:
+        return jsonify({"error": "not_found"}), 404
+    transcript = (n.get("transcript") or "").strip()
+    if not transcript:
+        return jsonify({"error": "Esta nota no tiene transcripción para resumir."}), 400
+
+    data = request.get_json(silent=True) or {}
+    ctype = data.get("context_type", "reunion")
+    try:
+        summary = summarize(transcript, n.get("manual_notes", ""), n.get("title", ""), ctype, "")
+    except Exception as e:  # error de red/API: lo devolvemos para reintentar
+        return jsonify({"error": f"No se pudo generar el resumen: {e}"}), 502
+
+    storage.update_summary(note_id, summary)
+    return jsonify({"summary": summary, "id": note_id})
 
 
 if __name__ == "__main__":

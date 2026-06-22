@@ -187,7 +187,7 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     parts.append("\n=== TRANSCRIPCIÓN AUTOMÁTICA ===\n" + (transcript.strip() or "(transcripción vacía)"))
     user_content = "\n".join(parts)
 
-    client = Anthropic()  # lee ANTHROPIC_API_KEY del entorno
+    client = Anthropic(max_retries=4, timeout=180)  # reintenta cortes de red transitorios
     message = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=max_tokens,

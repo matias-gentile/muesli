@@ -98,14 +98,23 @@ class Session:
                         "subir el volumen de la fuente o acercar el micrófono."))
                 return
 
+            # El resumen llama a la API: si falla (p.ej. corte de red), NO perdemos la
+            # transcripción. Guardamos igual y dejamos el resumen regenerable.
             self._set(status="summarizing")
-            summary = summarize(transcript, self.manual_notes, self.title,
-                                self.context_type, self.context)
+            summary, summary_error = None, None
+            try:
+                summary = summarize(transcript, self.manual_notes, self.title,
+                                    self.context_type, self.context)
+            except Exception as e:
+                summary_error = str(e)
+                summary = (f"_El resumen automático falló ({e}). La transcripción está "
+                           f"guardada — podés regenerar el resumen desde el panel._")
+
             note = storage.save_note(self.title, transcript, summary,
                                      self.manual_notes, self.audio_dir)
 
             notion_url, notion_error = None, None
-            if notion_sync.is_enabled():
+            if summary_error is None and notion_sync.is_enabled():
                 try:
                     notion_url = notion_sync.sync(
                         self.title, summary, type_label(self.context_type), note["created_at"])
@@ -115,7 +124,7 @@ class Session:
 
             self._set(result={"summary": summary, "transcript": transcript,
                               "note": note, "notion_url": notion_url,
-                              "notion_error": notion_error},
+                              "notion_error": notion_error, "summary_error": summary_error},
                       status="done")
         except Exception as e:
             self._set(status="error", error=f"fallo procesando: {e}")

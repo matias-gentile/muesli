@@ -34,13 +34,8 @@ def _slugify(title: str) -> str:
     return safe.replace(" ", "-") or "reunion"
 
 
-def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> dict:
-    created = datetime.datetime.now()
-    title = (title or "").strip() or "Reunión"
-    fname = f"{created.strftime('%Y%m%d-%H%M%S')}-{_slugify(title)}.md"
-    path = NOTES_DIR / fname
-
-    md = (
+def _render_md(title, created, summary, manual_notes, transcript) -> str:
+    return (
         f"# {title}\n\n"
         f"_{created.strftime('%Y-%m-%d %H:%M')}_\n\n"
         f"{summary}\n\n"
@@ -48,7 +43,15 @@ def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> di
         f"## Mis notas\n\n{(manual_notes or '').strip() or '_(sin notas manuales)_'}\n\n"
         f"## Transcripción completa\n\n{(transcript or '').strip() or '_(vacía)_'}\n"
     )
-    path.write_text(md, encoding="utf-8")
+
+
+def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> dict:
+    created = datetime.datetime.now()
+    title = (title or "").strip() or "Reunión"
+    fname = f"{created.strftime('%Y%m%d-%H%M%S')}-{_slugify(title)}.md"
+    path = NOTES_DIR / fname
+
+    path.write_text(_render_md(title, created, summary, manual_notes, transcript), encoding="utf-8")
 
     c = _conn()
     cur = c.execute(
@@ -64,6 +67,30 @@ def save_note(title, transcript, summary, manual_notes="", audio_dir=None) -> di
         "id": note_id, "title": title, "created_at": created.isoformat(),
         "path": str(path), "summary": summary,
     }
+
+
+def update_summary(note_id, summary) -> bool:
+    """Reemplaza el resumen de una nota existente (regenerar) y reescribe su .md."""
+    c = _conn()
+    row = c.execute(
+        "SELECT title, created_at, path, transcript, manual_notes FROM notes WHERE id=?",
+        (note_id,),
+    ).fetchone()
+    if not row:
+        c.close()
+        return False
+    title, created_at, path, transcript, manual_notes = row
+    c.execute("UPDATE notes SET summary=? WHERE id=?", (summary, note_id))
+    c.commit()
+    c.close()
+    if path:
+        try:
+            created = datetime.datetime.fromisoformat(created_at)
+            Path(path).write_text(
+                _render_md(title, created, summary, manual_notes, transcript), encoding="utf-8")
+        except Exception:
+            pass
+    return True
 
 
 def list_notes() -> list:

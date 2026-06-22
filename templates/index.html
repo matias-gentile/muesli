@@ -220,6 +220,13 @@
     background:var(--surface-2); border:1px solid var(--border);
     color:var(--text-dim); font-size:13px; line-height:1.5;
   }
+  .regen-btn{
+    margin:14px 0 0; padding:8px 14px; border-radius:9px; cursor:pointer;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--accent-text);
+    font-size:13px; font-weight:600;
+    transition:background .12s ease, border-color .12s ease;
+  }
+  .regen-btn:hover{background:var(--surface-3); border-color:var(--accent-text);}
   details{margin-top:18px;}
   summary{
     cursor:pointer; color:var(--text-dim); font-size:14px; list-style:none;
@@ -378,7 +385,8 @@ async function pollStatus() {
   } else if (s.status === "done") {
     finishStop();
     setStatus("✓ Listo y guardado.");
-    render(s.result.summary, s.result.transcript, s.result.notion_url, s.result.notion_error);
+    render(s.result.summary, s.result.transcript, s.result.notion_url, s.result.notion_error,
+           (s.result.note || {}).id, s.result.summary_error);
     await loadList();
     clearComposer();
     return;
@@ -428,16 +436,25 @@ function mdToHtml(md) {
   return html;
 }
 
-function render(summary, transcript, notionUrl, notionError) {
+function render(summary, transcript, notionUrl, notionError, noteId, summaryError) {
   let notion = "";
   if (notionUrl) {
     notion = `<a class="notion-link" href="${notionUrl}" target="_blank" rel="noopener">📄 Abrir en Notion ↗</a>`;
   } else if (notionError) {
     notion = `<div class="notion-warn">⚠️ No se pudo enviar a Notion: ${notionError.replace(/</g, "&lt;")}</div>`;
   }
+  let summaryWarn = "";
+  if (summaryError) {
+    summaryWarn = `<div class="notion-warn">⚠️ El resumen falló: ${summaryError.replace(/</g, "&lt;")}. La transcripción está guardada — probá "Regenerar resumen".</div>`;
+  }
+  const regen = noteId
+    ? `<button class="regen-btn" onclick="resummarize(${noteId})">↻ Regenerar resumen</button>`
+    : "";
   const html = `
     ${notion}
+    ${summaryWarn}
     <div class="card">${mdToHtml(summary)}</div>
+    ${regen}
     <details><summary>Ver transcripción completa</summary>
       <div class="transcript">${(transcript || "").replace(/</g, "&lt;")}</div>
     </details>`;
@@ -471,8 +488,25 @@ async function openNote(id) {
   const r = await fetch("/api/notes/" + id);
   const n = await r.json();
   setStatus("");
-  render(n.summary, n.transcript);
+  render(n.summary, n.transcript, null, null, n.id, null);
   await loadList();
+}
+
+async function resummarize(id) {
+  setStatus("Regenerando resumen con Claude…", true);
+  try {
+    const r = await fetch(`/api/notes/${id}/resummarize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ context_type: document.getElementById("ctype").value }),
+    });
+    const d = await r.json();
+    if (d.error) { setStatus("⚠️ " + d.error); return; }
+    setStatus("✓ Resumen regenerado.");
+    await openNote(id);
+  } catch (e) {
+    setStatus("⚠️ Error de conexión al regenerar.");
+  }
 }
 
 async function deleteNote(event, id) {
