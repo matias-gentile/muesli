@@ -29,6 +29,11 @@ AUDIO_DEVICE_NAME = os.getenv("AUDIO_DEVICE_NAME", "Aggregate")
 # (captura únicamente lo que suena en el sistema, sin tu micrófono).
 AUDIO_DEVICE_OUTPUT_ONLY = os.getenv("AUDIO_DEVICE_OUTPUT_ONLY", "BlackHole")
 
+# Duración de cada segmento de grabación, en segundos. Para reuniones largas:
+# los chunks se transcriben en segundo plano a medida que se completan, así el
+# procesado final es rápido y no se pierde nada si algo se corta. 600 = 10 min.
+CHUNK_SECONDS = int(os.getenv("CHUNK_SECONDS", "600"))
+
 # Notion (opcional): si ambos están definidos, cada grabación se sincroniza
 # como una página en la base de datos indicada.
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")

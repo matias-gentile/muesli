@@ -146,6 +146,24 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 
 ---
 
+## Reuniones largas
+
+Muesli graba en **segmentos de ~10 min** (`CHUNK_SECONDS`) y los va transcribiendo
+**en segundo plano mientras seguís grabando**. Esto da tres cosas:
+
+- **Procesado rápido al final**: cuando le das Detener, casi todo ya está
+  transcripto; solo falta el último pedazo y el resumen.
+- **Resiliencia**: si algo se corta, los chunks ya cerrados quedan guardados y
+  válidos en `recordings/meeting-<fecha>/` (no perdés la reunión entera).
+- **Progreso visible**: al detener, la app no se bloquea — muestra
+  "Transcribiendo segmentos… 8 / 12" y luego "Resumiendo con Claude…".
+
+Al final se concatenan todas las transcripciones en orden y se genera **un único
+resumen**. Probado para reuniones de hasta ~2 h. Si transcribir mientras grabás
+hiciera glitchear el audio (CPU saturada), usá un `WHISPER_MODEL` más chico.
+
+---
+
 ## Configuración (`.env`)
 
 | Variable | Para qué |
@@ -156,6 +174,7 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 | `WHISPER_VAD` | `0` (off, más permisivo con audio bajo) o `1` (descarta silencios) |
 | `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
 | `AUDIO_DEVICE_OUTPUT_ONLY` | Dispositivo para el modo "solo salida" (por defecto `BlackHole`) |
+| `CHUNK_SECONDS` | Duración de cada segmento de grabación (por defecto `600` = 10 min) |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
 | `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
 

@@ -330,7 +330,7 @@ async function stop() {
   document.getElementById("recBtn").classList.remove("recording");
   document.getElementById("recBtn").disabled = true;
   document.getElementById("recLabel").textContent = "Procesando…";
-  setStatus("Transcribiendo y resumiendo con Claude… (puede tardar un poco)", true);
+  setStatus("Finalizando grabación…", true);
 
   const body = {
     title: document.getElementById("title").value,
@@ -344,16 +344,48 @@ async function stop() {
     body: JSON.stringify(body),
   });
   const data = await r.json();
+  if (data.error) { finishStop(); setStatus("⚠️ " + data.error); return; }
+  pollStatus();
+}
 
+async function pollStatus() {
+  let s;
+  try {
+    const r = await fetch("/api/status");
+    s = await r.json();
+  } catch (e) {
+    setTimeout(pollStatus, 2000); return;
+  }
+  if (s.status === "transcribing") {
+    const tot = s.total_chunks ? ` / ${s.total_chunks}` : "";
+    setStatus(`Transcribiendo segmentos… ${s.done_chunks}${tot}`, true);
+  } else if (s.status === "summarizing") {
+    setStatus("Resumiendo con Claude…", true);
+  } else if (s.status === "done") {
+    finishStop();
+    setStatus("✓ Listo y guardado.");
+    render(s.result.summary, s.result.transcript, s.result.notion_url);
+    await loadList();
+    clearComposer();
+    return;
+  } else if (s.status === "error") {
+    finishStop();
+    setStatus("⚠️ " + s.error);
+    return;
+  } else {
+    setStatus("Procesando…", true);
+  }
+  setTimeout(pollStatus, 1500);
+}
+
+function finishStop() {
   document.getElementById("recBtn").disabled = false;
   document.getElementById("recLabel").textContent = "● Grabar";
   document.getElementById("timer").textContent = "";
   setModeEnabled(true);
+}
 
-  if (data.error) { setStatus("⚠️ " + data.error); return; }
-  setStatus("✓ Listo y guardado.");
-  render(data.summary, data.transcript, data.notion_url);
-  await loadList();
+function clearComposer() {
   document.getElementById("title").value = "";
   document.getElementById("notes").value = "";
   document.getElementById("context").value = "";
