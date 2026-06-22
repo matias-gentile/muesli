@@ -135,10 +135,13 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 2. Elegí el **tipo** de grabación en el selector.
 3. (Recomendado) Agregá **contexto**: p. ej. "Sprint 14, equipo backend, tema
    migración a Postgres".
-4. **Grabar**. Mientras hablan, anotá lo que te importa en el área de notas — esas
+4. Elegí **qué grabar** con el toggle: **"Salida + micrófono"** (vos y los demás) o
+   **"Solo salida"** (solo lo que suena en el sistema, sin tu voz — útil para
+   videos, podcasts o llamadas donde no querés grabarte).
+5. **Grabar**. Mientras hablan, anotá lo que te importa en el área de notas — esas
    notas guían el resumen.
-5. **Detener y resumir**. La app transcribe, resume con Claude según el tipo y guarda.
-6. El resumen aparece en pantalla; las grabaciones quedan en la barra lateral y
+6. **Detener y resumir**. La app transcribe, resume con Claude según el tipo y guarda.
+7. El resumen aparece en pantalla; las grabaciones quedan en la barra lateral y
    como `.md` en `notes/`.
 
 ---
@@ -151,6 +154,7 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 | `CLAUDE_MODEL` | `claude-sonnet-4-6` (recomendado), `claude-opus-4-8` (+calidad), `claude-haiku-4-5-20251001` (+barato) |
 | `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` (más grande = más preciso y lento) |
 | `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
+| `AUDIO_DEVICE_OUTPUT_ONLY` | Dispositivo para el modo "solo salida" (por defecto `BlackHole`) |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
 | `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
 

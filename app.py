@@ -7,7 +7,7 @@ from flask import Flask, jsonify, render_template, request
 import storage
 import notion_sync
 from audio_capture import Recorder
-from config import AUDIO_DEVICE_NAME
+from config import AUDIO_DEVICE_NAME, AUDIO_DEVICE_OUTPUT_ONLY
 from summarize import list_templates, summarize, type_label
 from transcribe import transcribe
 
@@ -41,12 +41,18 @@ def start():
     global recorder
     if recorder is not None and recorder.recording:
         return jsonify({"status": "already_recording"})
+
+    data = request.get_json(silent=True) or {}
+    # "full" = salida del sistema + micrófono; "output" = solo salida del sistema.
+    mode = data.get("mode", "full")
+    device = AUDIO_DEVICE_OUTPUT_ONLY if mode == "output" else AUDIO_DEVICE_NAME
+
     try:
-        recorder = Recorder(device_name=AUDIO_DEVICE_NAME)
+        recorder = Recorder(device_name=device)
         path = recorder.start()
     except Exception as e:  # dispositivo no encontrado, permisos, etc.
         return jsonify({"error": str(e)}), 400
-    return jsonify({"status": "recording", "file": str(path)})
+    return jsonify({"status": "recording", "file": str(path), "mode": mode})
 
 
 @app.route("/api/stop", methods=["POST"])

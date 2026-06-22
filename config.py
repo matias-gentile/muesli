@@ -17,9 +17,13 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
-# Substring para localizar el dispositivo de entrada agregado
-# (BlackHole + micrófono) en Audio MIDI Setup.
+# Dispositivo de entrada para "salida + micrófono": el dispositivo AGREGADO
+# (BlackHole + micrófono) que creaste en Audio MIDI Setup.
 AUDIO_DEVICE_NAME = os.getenv("AUDIO_DEVICE_NAME", "Aggregate")
+
+# Dispositivo de entrada para "solo salida del sistema": BlackHole directo
+# (captura únicamente lo que suena en el sistema, sin tu micrófono).
+AUDIO_DEVICE_OUTPUT_ONLY = os.getenv("AUDIO_DEVICE_OUTPUT_ONLY", "BlackHole")
 
 # Notion (opcional): si ambos están definidos, cada grabación se sincroniza
 # como una página en la base de datos indicada.
