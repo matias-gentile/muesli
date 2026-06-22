@@ -36,6 +36,22 @@ if ! "$PYBIN" -c "import rumps" >/dev/null 2>&1; then
   echo ""
 fi
 
+# 3b) Aviso si el proyecto vive en una carpeta protegida por la privacidad de macOS
+#     (Escritorio/Documentos/Descargas): al abrir con doble clic, macOS puede
+#     bloquear el acceso al .venv con "Operation not permitted".
+case "$PROJECT_DIR/" in
+  "$HOME/Desktop/"*|"$HOME/Documents/"*|"$HOME/Downloads/"*)
+    echo "⚠  El proyecto está dentro de una carpeta protegida por macOS (Escritorio/Documentos/Descargas)."
+    echo "   Al abrir con doble clic, macOS puede bloquear el acceso al entorno (.venv) con"
+    echo "   'Operation not permitted'. Para que el .app funcione, elegí una:"
+    echo "     1) Dale a Muesli.app 'Acceso a disco completo' en Ajustes → Privacidad y seguridad."
+    echo "     2) (recomendado) Mové el proyecto fuera de esas carpetas, p. ej. a ~/Developer/muesli,"
+    echo "        recreá el venv ahí (python3 -m venv .venv && pip install -r requirements.txt)"
+    echo "        y volvé a correr este script."
+    echo ""
+    ;;
+esac
+
 # 4) Armamos el bundle .app en el Escritorio.
 APP="$HOME/Desktop/Muesli.app"
 echo "Creando $APP ..."
