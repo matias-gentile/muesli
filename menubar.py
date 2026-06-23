@@ -78,7 +78,6 @@ class MuesliBar(rumps.App):
         mode_menu.add(self.mode_out)
 
         self.out_menu = rumps.MenuItem("🔊 Salida de audio")
-        self._build_output_menu()
 
         self.menu = [
             self.record_item,
@@ -90,6 +89,7 @@ class MuesliBar(rumps.App):
             None,
             rumps.MenuItem("Salir", callback=self.quit_app),
         ]
+        self._build_output_menu()
         self._panel_proc = None
 
         self.timer = rumps.Timer(self.tick, 1.0)
@@ -113,7 +113,10 @@ class MuesliBar(rumps.App):
             outs = audio_output.list_outputs()
         except Exception:
             outs = []
-        self.out_menu.clear()
+        # clear() falla si el submenú todavía no tiene hijos (su NSMenu interno es None);
+        # en ese caso (primer armado) no hay nada que limpiar.
+        if getattr(self.out_menu, "_menu", None) is not None:
+            self.out_menu.clear()
         if not outs:
             self.out_menu.add(rumps.MenuItem("(sin dispositivos de salida)"))
         else:
