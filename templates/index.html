@@ -157,6 +157,9 @@
   .test-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   .test-hint{font-size:12px; color:var(--text-faint); margin-top:-4px;}
   .test-result{font-size:13px; font-weight:600; min-height:18px;}
+  .storage-info{font-size:13px; color:var(--text-dim); line-height:1.5;}
+  .edit-btn.danger{color:var(--rec); border-color:var(--rec);}
+  .edit-btn.danger:hover{background:rgba(193,58,42,.08);}
   .pause-btn{
     flex-shrink:0; padding:5px 11px; border-radius:8px; cursor:pointer;
     border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim);
@@ -509,6 +512,18 @@
           <span>Notion database ID</span>
           <input id="setNotionDb" type="text" placeholder="32 caracteres" />
         </label>
+
+        <div class="fld-sep">Almacenamiento</div>
+        <div id="storageInfo" class="storage-info">Calculando uso de disco…</div>
+        <div class="test-row">
+          <button class="edit-btn" onclick="purgeProcessed()">Liberar audio procesado</button>
+          <button class="edit-btn danger" onclick="purgeOrphans()">Borrar sin procesar</button>
+        </div>
+        <div class="test-hint">
+          "Liberar audio procesado" borra los .wav de las reuniones que ya tienen resumen
+          (conserva la nota y la transcripción). "Borrar sin procesar" elimina grabaciones
+          que todavía no transcribiste — esas no se pueden recuperar después.
+        </div>
       </div>
       <div class="modal-foot">
         <button class="edit-btn" onclick="closeSettings()">Cancelar</button>
@@ -1013,6 +1028,7 @@ async function openSettings() {
     s.NOTION_API_KEY_set ? "•••••• configurado — vacío = no cambiar" : "dejá vacío para no cambiar";
   document.getElementById("setNotionDb").value = s.NOTION_DATABASE_ID || "";
   loadHealth();
+  loadStorage();
 }
 
 function fillDeviceSelect(id, current) {
@@ -1109,6 +1125,46 @@ function setupHtml(h, withDismiss) {
       ${checkItem(h.notion, "Notion conectado", 'Cargá tu API key y database ID de Notion en ⚙ Configuración.', true)}
     </ul>
     ${withDismiss ? '<div class="setup-actions"><button class="regen-btn" onclick="openSettings()">⚙ Abrir Configuración</button></div>' : ''}`;
+}
+
+function fmtBytes(n) {
+  if (!n) return "0 MB";
+  const mb = n / (1024 * 1024);
+  if (mb < 1) return (n / 1024).toFixed(0) + " KB";
+  if (mb < 1024) return mb.toFixed(mb < 10 ? 1 : 0) + " MB";
+  return (mb / 1024).toFixed(2) + " GB";
+}
+
+async function loadStorage() {
+  const el = document.getElementById("storageInfo");
+  if (!el) return;
+  el.textContent = "Calculando uso de disco…";
+  let u;
+  try { u = await (await fetch("/api/audio-usage")).json(); }
+  catch (e) { el.textContent = "No se pudo calcular el uso."; return; }
+  el.innerHTML =
+    `Total en grabaciones: <b>${fmtBytes(u.total_bytes)}</b><br>` +
+    `Procesadas (con resumen): ${fmtBytes(u.processed_bytes)} · ${u.processed_count} reunión(es)<br>` +
+    `Sin procesar: ${fmtBytes(u.orphan_bytes)} · ${u.orphan_count} grabación(es)`;
+}
+
+async function purgeProcessed() {
+  if (!confirm("¿Borrar los .wav de las reuniones ya procesadas? Se conservan las notas, transcripciones y resúmenes.")) return;
+  try {
+    const r = await (await fetch("/api/audio/purge-processed", { method: "POST" })).json();
+    setStatus(`✓ Liberados ${fmtBytes(r.freed_bytes)} (${r.removed} grabación/es).`);
+  } catch (e) { setStatus("⚠️ No se pudo liberar el audio."); return; }
+  loadStorage();
+}
+
+async function purgeOrphans() {
+  if (!confirm("¿Borrar las grabaciones SIN procesar? Elimina los .wav que todavía no transcribiste y no se pueden recuperar.")) return;
+  try {
+    const r = await (await fetch("/api/audio/purge-orphans", { method: "POST" })).json();
+    setStatus(`✓ Borradas ${r.removed} grabación/es sin procesar (${fmtBytes(r.freed_bytes)}).`);
+  } catch (e) { setStatus("⚠️ No se pudieron borrar."); return; }
+  loadStorage();
+  loadRecoverable();
 }
 
 document.addEventListener("keydown", (e) => {

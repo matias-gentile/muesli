@@ -4,7 +4,7 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-from config import NOTES_DIR, DB_PATH
+from config import NOTES_DIR, DB_PATH, RECORDINGS_DIR
 
 
 def _conn():
@@ -110,6 +110,96 @@ def used_audio_dirs() -> set:
     rows = c.execute("SELECT audio_dir FROM notes WHERE audio_dir IS NOT NULL").fetchall()
     c.close()
     return {r[0] for r in rows if r[0]}
+
+
+def _dir_size(path) -> int:
+    """Tamaño total en bytes de una carpeta (0 si no existe)."""
+    p = Path(path)
+    total = 0
+    if p.exists():
+        for f in p.rglob("*"):
+            if f.is_file():
+                try:
+                    total += f.stat().st_size
+                except OSError:
+                    pass
+    return total
+
+
+def audio_usage() -> dict:
+    """Espacio ocupado por las grabaciones, separando 'procesadas' (con nota) de
+    'sin procesar' (carpetas sueltas que todavía no se transcribieron)."""
+    used = used_audio_dirs()
+    used_resolved = {str(Path(d).resolve()) for d in used}
+    processed_bytes = sum(_dir_size(d) for d in used)
+
+    orphan_bytes = 0
+    orphan_count = 0
+    if RECORDINGS_DIR.exists():
+        for sub in RECORDINGS_DIR.iterdir():
+            if sub.is_dir() and str(sub.resolve()) not in used_resolved:
+                orphan_bytes += _dir_size(sub)
+                orphan_count += 1
+
+    return {
+        "processed_count": len(used),
+        "processed_bytes": processed_bytes,
+        "orphan_count": orphan_count,
+        "orphan_bytes": orphan_bytes,
+        "total_bytes": processed_bytes + orphan_bytes,
+    }
+
+
+def purge_processed_audio() -> dict:
+    """Borra los .wav de las grabaciones YA PROCESADAS (las que tienen nota), dejando
+    intactas la transcripción y el resumen. Marca esas notas como sin audio."""
+    used = used_audio_dirs()
+    removed = 0
+    freed = 0
+    for d in used:
+        freed += _dir_size(d)
+        shutil.rmtree(d, ignore_errors=True)
+        if not Path(d).exists():
+            removed += 1
+    c = _conn()
+    c.execute("UPDATE notes SET audio_dir=NULL WHERE audio_dir IS NOT NULL")
+    c.commit()
+    c.close()
+    return {"removed": removed, "freed_bytes": freed}
+
+
+def purge_orphan_audio(exclude=None) -> dict:
+    """Borra carpetas de grabación SIN nota asociada (sin procesar). `exclude` permite
+    excluir la grabación en curso para no tocarla."""
+    used_resolved = {str(Path(d).resolve()) for d in used_audio_dirs()}
+    if exclude:
+        used_resolved.add(str(Path(exclude).resolve()))
+    removed = 0
+    freed = 0
+    if RECORDINGS_DIR.exists():
+        for sub in list(RECORDINGS_DIR.iterdir()):
+            if sub.is_dir() and str(sub.resolve()) not in used_resolved:
+                freed += _dir_size(sub)
+                shutil.rmtree(sub, ignore_errors=True)
+                if not sub.exists():
+                    removed += 1
+    return {"removed": removed, "freed_bytes": freed}
+
+
+def purge_note_audio(note_id: int) -> dict:
+    """Borra solo el audio de una nota puntual, conservando la nota."""
+    c = _conn()
+    row = c.execute("SELECT audio_dir FROM notes WHERE id=?", (note_id,)).fetchone()
+    if not row or not row[0]:
+        c.close()
+        return {"removed": 0, "freed_bytes": 0}
+    audio_dir = row[0]
+    freed = _dir_size(audio_dir)
+    shutil.rmtree(audio_dir, ignore_errors=True)
+    c.execute("UPDATE notes SET audio_dir=NULL WHERE id=?", (note_id,))
+    c.commit()
+    c.close()
+    return {"removed": 1, "freed_bytes": freed}
 
 
 def list_notes() -> list:

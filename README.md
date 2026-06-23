@@ -287,6 +287,11 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 > Claude** y de **Whisper**, la duración de segmento y las credenciales de **Notion**.
 > Los cambios se aplican en vivo (sin reiniciar) y se guardan en `settings.json`.
 > El `.env` sigue funcionando como valores por defecto.
+>
+> En **⚙ Configuración → Almacenamiento** ves cuánto ocupan las grabaciones y podés
+> **liberar el audio ya procesado** (borra los `.wav` de las reuniones que ya tienen
+> resumen, conservando la nota y la transcripción) o **borrar las grabaciones sin
+> procesar** (las que nunca transcribiste).
 
 | Variable | Para qué |
 |---|---|

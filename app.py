@@ -266,6 +266,25 @@ def recover():
     return jsonify({"status": "processing"})
 
 
+@app.route("/api/audio-usage")
+def audio_usage():
+    """Cuánto espacio ocupan las grabaciones (procesadas vs. sin procesar)."""
+    return jsonify(storage.audio_usage())
+
+
+@app.route("/api/audio/purge-processed", methods=["POST"])
+def purge_processed():
+    """Libera los .wav de las grabaciones ya procesadas; conserva notas y resúmenes."""
+    return jsonify(storage.purge_processed_audio())
+
+
+@app.route("/api/audio/purge-orphans", methods=["POST"])
+def purge_orphans():
+    """Borra grabaciones sin procesar (sin nota). Excluye la grabación en curso."""
+    exclude = recorder.session_dir if (recorder is not None and recorder.recording) else None
+    return jsonify(storage.purge_orphan_audio(exclude=exclude))
+
+
 if __name__ == "__main__":
     # Pedí permiso de micrófono al iniciar (sin esto, los dispositivos de entrada
     # pueden aparecer con 0 canales hasta concederlo).
