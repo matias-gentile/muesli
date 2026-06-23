@@ -68,6 +68,12 @@ APP="$HOME/Desktop/Muesli.app"
 echo "Creando $APP ..."
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/Resources"
+
+# Ícono del .app (si está en assets/).
+if [ -f "$PROJECT_DIR/assets/icon.icns" ]; then
+  cp "$PROJECT_DIR/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
+fi
 
 # 4a) Info.plist — LSUIElement=true => app de barra de menú, sin ícono en el Dock.
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -82,6 +88,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>Muesli</string>
+  <key>CFBundleIconFile</key><string>icon</string>
   <key>LSUIElement</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>Muesli graba el audio de tus reuniones para transcribirlas localmente.</string>
 </dict>

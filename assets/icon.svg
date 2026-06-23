@@ -1,0 +1,63 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FBF4E7"/>
+      <stop offset="1" stop-color="#F3E6CE"/>
+    </linearGradient>
+    <linearGradient id="bowl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F1E7D5"/>
+    </linearGradient>
+    <linearGradient id="honey" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2B23E"/>
+      <stop offset="1" stop-color="#DC8A1C"/>
+    </linearGradient>
+    <linearGradient id="milk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFDF8"/>
+      <stop offset="1" stop-color="#F6EEDF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo redondeado estilo app de macOS -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="none" stroke="#E7D8BC" stroke-width="6"/>
+
+  <!-- Resplandor cálido -->
+  <circle cx="512" cy="430" r="330" fill="#F2B23E" opacity="0.10"/>
+
+  <!-- Cuenco -->
+  <g>
+    <!-- leche / interior -->
+    <path d="M250 470 a262 262 0 0 0 524 0 Z" fill="url(#milk)"/>
+    <!-- cuerpo del cuenco -->
+    <path d="M214 452 h596 a298 298 0 0 1 -596 0 Z" fill="url(#bowl)" stroke="#E6D6BA" stroke-width="8"/>
+    <!-- borde superior -->
+    <ellipse cx="512" cy="452" rx="298" ry="60" fill="url(#milk)" stroke="#E6D6BA" stroke-width="8"/>
+
+    <!-- copos / avena (gotas miel) -->
+    <g fill="url(#honey)">
+      <ellipse cx="430" cy="436" rx="34" ry="22" transform="rotate(-18 430 436)"/>
+      <ellipse cx="540" cy="446" rx="38" ry="24" transform="rotate(12 540 446)"/>
+      <ellipse cx="628" cy="430" rx="30" ry="20" transform="rotate(-8 628 430)"/>
+      <ellipse cx="486" cy="456" rx="30" ry="19" transform="rotate(20 486 456)"/>
+      <ellipse cx="592" cy="462" rx="26" ry="17" transform="rotate(-22 592 462)"/>
+    </g>
+    <!-- semillas / berries -->
+    <circle cx="402" cy="452" r="13" fill="#C0511F"/>
+    <circle cx="566" cy="430" r="12" fill="#9C3F18"/>
+    <circle cx="650" cy="452" r="11" fill="#C0511F"/>
+
+    <!-- cuchara -->
+    <g stroke="#C98A2A" stroke-width="22" stroke-linecap="round" fill="none">
+      <path d="M742 300 L660 470"/>
+    </g>
+    <ellipse cx="752" cy="286" rx="46" ry="30" transform="rotate(34 752 286)" fill="url(#honey)" stroke="#C98A2A" stroke-width="10"/>
+  </g>
+
+  <!-- Vapor (cálido, sutil) -->
+  <g stroke="#DC8A1C" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.55">
+    <path d="M430 360 q-26 -34 0 -68 q26 -34 0 -68"/>
+    <path d="M520 348 q-26 -34 0 -68 q26 -34 0 -68"/>
+    <path d="M610 360 q-26 -34 0 -68 q26 -34 0 -68"/>
+  </g>
+</svg>

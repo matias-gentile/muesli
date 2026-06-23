@@ -238,6 +238,9 @@ Detalles:
   Si lo ves: `git pull`, `pip install -r requirements.txt` (suma una dependencia de
   macOS), `./build_app.command`, reabrí Muesli y dale **Permitir** al diálogo de
   micrófono (o activalo en Ajustes → Privacidad y seguridad → Micrófono).
+- **Ícono propio:** el `.app` usa el ícono de Muesli (`assets/icon.icns`). Si tras
+  regenerarlo macOS sigue mostrando el ícono viejo/genérico, es el caché: probá
+  `killall Dock` (y `killall Finder`), o mové el `.app` a otra carpeta y volvé.
 - Si **movés la carpeta** del proyecto, volvé a correr `build_app.command` (el `.app`
   guarda la ruta absoluta).
 - Podés arrastrar `Muesli.app` a **Aplicaciones**, y/o agregarlo a **Ajustes → General →

@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 import sounddevice as sd
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, send_from_directory
 
 import config
 import notion_sync
@@ -29,6 +29,16 @@ session: Session | None = None
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/favicon.png")
+def favicon_png():
+    return send_from_directory(str(config.BASE_DIR / "assets"), "favicon.png")
+
+
+@app.route("/favicon.ico")
+def favicon_ico():
+    return send_from_directory(str(config.BASE_DIR / "assets"), "favicon.png")
 
 
 @app.route("/api/devices")
