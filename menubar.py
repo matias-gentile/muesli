@@ -77,11 +77,15 @@ class MuesliBar(rumps.App):
         mode_menu.add(self.mode_full)
         mode_menu.add(self.mode_out)
 
+        self.out_menu = rumps.MenuItem("🔊 Salida de audio")
+        self._build_output_menu()
+
         self.menu = [
             self.record_item,
             self.status_item,
             None,
             mode_menu,
+            self.out_menu,
             rumps.MenuItem("Abrir panel", callback=self.open_panel),
             None,
             rumps.MenuItem("Salir", callback=self.quit_app),
@@ -101,6 +105,37 @@ class MuesliBar(rumps.App):
         self.mode = "output"
         self.mode_full.state = False
         self.mode_out.state = True
+
+    # ---- salida de audio del sistema ----
+    def _build_output_menu(self):
+        try:
+            import audio_output
+            outs = audio_output.list_outputs()
+        except Exception:
+            outs = []
+        self.out_menu.clear()
+        if not outs:
+            self.out_menu.add(rumps.MenuItem("(sin dispositivos de salida)"))
+        else:
+            for o in outs:
+                # 🟢 marca las salidas que incluyen BlackHole (mantienen la captura).
+                label = ("🟢 " if o.get("keeps_capture") else "") + o["name"]
+                item = rumps.MenuItem(label, callback=self._make_output_cb(o["name"]))
+                item.state = 1 if o.get("is_default") else 0
+                self.out_menu.add(item)
+        self.out_menu.add(rumps.separator)
+        self.out_menu.add(rumps.MenuItem("↻ Actualizar lista", callback=lambda _: self._build_output_menu()))
+
+    def _make_output_cb(self, name):
+        def cb(_):
+            try:
+                import audio_output
+                ok = audio_output.set_default_output(name)
+            except Exception:
+                ok = False
+            notify("Muesli", f"Salida: {name}" if ok else f"No se pudo cambiar a {name}")
+            self._build_output_menu()
+        return cb
 
     # ---- grabar / parar ----
     def toggle_record(self, _):

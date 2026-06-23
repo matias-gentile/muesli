@@ -180,8 +180,19 @@ Vas a ver un 🎙️ en la barra de menú. Desde ahí:
 - **Estado en vivo**: "Transcribiendo 3/12…", "Resumiendo con Claude…", y una
   **notificación nativa** cuando el resumen está listo.
 - **Fuente de audio**: elegís "Salida + micrófono" o "Solo salida del sistema".
+- **🔊 Salida de audio**: cambiá el dispositivo de salida del sistema (bocinas, AirPods,
+  etc.) con un clic, sin ir a Ajustes. Las opciones con un **🟢** son las que incluyen
+  BlackHole — o sea, **mantienen la captura de Muesli** mientras escuchás. La salida
+  actual queda tildada. (Si acabás de conectar/desconectar AirPods, "↻ Actualizar lista".)
 - **Abrir panel**: abre la interfaz completa (historial, notas, tipo de reunión,
   resúmenes) en una **ventana nativa** — la misma UI, pero sin navegador.
+
+> **Tip — alternar entre AirPods y bocinas sin perder la captura:** creá en *Configuración
+> de Audio MIDI* **dos** dispositivos de *Salida Múltiple*, cada uno con BlackHole + un
+> parlante (p. ej. "Muesli — Bocinas" y "Muesli — AirPods"; activá *Corrección de deriva*
+> en los AirPods). Como ambos pasan por BlackHole, los ves con 🟢 en el menú y podés saltar
+> de uno a otro mientras grabás. (Ojo: con una Salida Múltiple activa, las teclas de
+> volumen del teclado no funcionan; subí/bajá volumen desde la app que reproduce.)
 
 La barra de menú y el panel comparten el mismo estado: si arrancás a grabar en uno,
 el otro lo refleja. Para una captura rápida alcanza con la barra (usa un nombre por
