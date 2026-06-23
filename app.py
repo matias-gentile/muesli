@@ -215,6 +215,14 @@ def resummarize(note_id):
     return jsonify({"summary": summary, "id": note_id})
 
 
+@app.route("/api/notes/<int:note_id>/purge-audio", methods=["POST"])
+def purge_one_note_audio(note_id):
+    """Libera el audio (.wav) de una sola nota, conservando la nota."""
+    if not storage.get_note(note_id):
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(storage.purge_note_audio(note_id))
+
+
 @app.route("/api/notes/<int:note_id>/download")
 def download_note(note_id):
     md = storage.note_markdown(note_id)

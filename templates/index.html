@@ -785,11 +785,15 @@ function render(o) {
   if (o.summaryError) {
     summaryWarn = `<div class="notion-warn">⚠️ El resumen falló: ${(o.summaryError).replace(/</g, "&lt;")}. La transcripción está guardada — probá "↻ Regenerar".</div>`;
   }
+  const purgeBtn = (noteId && o.hasAudio)
+    ? `<button class="edit-btn" onclick="purgeNoteAudio(${noteId})" title="Borrar el .wav de esta reunión (conserva la nota)">⌫ Liberar audio</button>`
+    : "";
   const actions = noteId ? `<div class="note-actions">
         <button class="edit-btn" onclick="copySummary()">⧉ Copiar</button>
         <a class="edit-btn" href="/api/notes/${noteId}/download" download>⤓ .md</a>
         <button class="edit-btn" onclick="editSummary(${noteId})">✎ Editar</button>
         <button class="regen-btn" onclick="resummarize(${noteId})">↻ Regenerar</button>
+        ${purgeBtn}
       </div>` : "";
   document.getElementById("result").innerHTML = `
     ${header}
@@ -928,13 +932,26 @@ function renderList(q) {
   list.innerHTML = html;
 }
 
+async function purgeNoteAudio(id) {
+  if (!confirm("¿Borrar el audio (.wav) de esta reunión? Se conserva la nota, la transcripción y el resumen.")) return;
+  try {
+    const r = await (await fetch(`/api/notes/${id}/purge-audio`, { method: "POST" })).json();
+    if (r.removed) {
+      setStatus(`✓ Audio liberado (${fmtBytes(r.freed_bytes)}).`);
+      openNote(id);  // re-render: el botón desaparece porque ya no hay audio
+    } else {
+      setStatus("Esta reunión ya no tenía audio.");
+    }
+  } catch (e) { setStatus("⚠️ No se pudo liberar el audio."); }
+}
+
 async function openNote(id) {
   activeId = id;
   const r = await fetch("/api/notes/" + id);
   const n = await r.json();
   setStatus("");
   render({ summary: n.summary, transcript: n.transcript, noteId: n.id,
-           title: n.title, createdAt: n.created_at });
+           title: n.title, createdAt: n.created_at, hasAudio: n.has_audio });
   await loadList();
 }
 

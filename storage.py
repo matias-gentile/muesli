@@ -214,7 +214,7 @@ def list_notes() -> list:
 def get_note(note_id: int):
     c = _conn()
     r = c.execute(
-        "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype "
+        "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype, audio_dir "
         "FROM notes WHERE id=?",
         (note_id,),
     ).fetchone()
@@ -224,6 +224,7 @@ def get_note(note_id: int):
     return {
         "id": r[0], "title": r[1], "created_at": r[2], "path": r[3],
         "transcript": r[4], "summary": r[5], "manual_notes": r[6], "ctype": r[7],
+        "has_audio": bool(r[8]),
     }
 
 
