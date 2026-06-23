@@ -62,7 +62,9 @@
     overflow-y:auto;
     display:flex; flex-direction:column; gap:24px;
   }
-  .wordmark{display:flex; align-items:center; gap:11px; padding:4px 8px;}
+  .wordmark{display:flex; align-items:center; gap:11px; padding:4px 8px; cursor:pointer; user-select:none;}
+  .wordmark:hover h1{color:var(--accent-text);}
+  .wordmark h1{transition:color .15s ease;}
   .wordmark .seed{
     width:15px; height:15px; border-radius:50% 50% 50% 2px;
     background:linear-gradient(150deg,var(--accent),var(--accent-2));
@@ -116,12 +118,24 @@
     display:inline-block; font-size:10px; font-weight:600; padding:1px 7px; border-radius:999px;
     background:var(--surface-3); color:var(--text-dim); margin-left:5px; vertical-align:middle;
   }
+  .new-rec{
+    width:100%; display:flex; align-items:center; justify-content:center; gap:7px;
+    padding:10px 12px; border-radius:12px; cursor:pointer;
+    background:var(--surface); color:var(--accent-text); border:1px solid var(--border);
+    font-family:inherit; font-size:13.5px; font-weight:600;
+    transition:background .12s ease, border-color .12s ease, transform .1s ease, box-shadow .15s ease;
+  }
+  .new-rec:hover{background:var(--surface-2); border-color:var(--accent-text); transform:translateY(-1px); box-shadow:var(--shadow-sm);}
+  .new-rec:active{transform:translateY(0);}
+  .new-rec .plus{font-size:16px; line-height:1; margin-top:-1px;}
   .settings-btn{
-    margin-top:18px; width:100%; padding:9px; border-radius:9px; cursor:pointer;
+    width:100%; padding:9px; border-radius:9px; cursor:pointer;
     border:1px solid var(--border); background:var(--surface); color:var(--text-dim);
     font-size:13px; font-weight:600; transition:background .12s ease;
   }
   .settings-btn:hover{background:var(--surface-2);}
+  .side-bottom{margin-top:auto; display:flex; flex-direction:column; gap:9px; padding-top:8px;}
+  .side-foot{font-size:11px; color:var(--text-faint); text-align:center; letter-spacing:.02em; line-height:1.4;}
   .overlay{
     position:fixed; inset:0; background:rgba(40,30,15,.45);
     display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;
@@ -210,8 +224,8 @@
   }
   .recover-btn:hover{filter:brightness(1.05);}
   .live-panel{
-    margin:16px 0 4px; padding:14px 16px; border-radius:14px;
-    background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm);
+    margin:4px 0 2px; padding:14px 16px; border-radius:14px;
+    background:var(--surface-2); border:1px solid var(--border);
   }
   .meter-row{display:flex; align-items:center; gap:11px;}
   .meter-label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint);}
@@ -230,21 +244,32 @@
 
   /* Main */
   main{position:relative; z-index:1; padding:34px 44px 64px; overflow-y:auto; max-width:940px;}
+  .composer{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:20px; padding:22px 24px 20px;
+    box-shadow:var(--shadow); animation:rise .3s ease both;
+  }
+  .composer-eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--text-faint); margin-bottom:12px;
+  }
   .title{
     width:100%; background:transparent; border:none;
-    border-bottom:1px solid var(--border); color:var(--text);
-    font-family:var(--font-ui); font-size:26px; font-weight:600;
-    letter-spacing:-.015em; padding:6px 2px 12px; margin-bottom:22px;
+    border-bottom:1px solid var(--border-soft); color:var(--text);
+    font-family:var(--font-display); font-optical-sizing:auto;
+    font-size:27px; font-weight:600; letter-spacing:-.005em;
+    padding:2px 0 14px; margin-bottom:18px;
     transition:border-color .2s ease;
   }
-  .title::placeholder{color:var(--text-faint);}
+  .title::placeholder{color:var(--text-faint); font-style:italic;}
   .title:focus{outline:none; border-color:var(--accent-text);}
 
-  .meta{display:flex; gap:10px; margin-bottom:22px; flex-wrap:wrap;}
+  .meta{display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap;}
   .select,.ctx{
-    background:var(--surface); border:1px solid var(--border);
+    background:var(--surface-2); border:1px solid var(--border);
     color:var(--text); border-radius:10px; padding:11px 14px;
-    font-size:14px; font-family:inherit; transition:border-color .15s ease, box-shadow .15s ease;
+    font-size:14px; font-family:inherit;
+    transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
   }
   .select{
     min-width:188px; cursor:pointer; appearance:none; -webkit-appearance:none; padding-right:38px;
@@ -252,9 +277,9 @@
     background-repeat:no-repeat; background-position:right 13px center;
   }
   .ctx{flex:1; min-width:240px;}
-  .select:focus,.ctx:focus{outline:none; border-color:var(--accent-text); box-shadow:0 0 0 3px var(--accent-glow);}
+  .select:focus,.ctx:focus{outline:none; background:var(--surface); border-color:var(--accent-text); box-shadow:0 0 0 3px var(--accent-glow);}
 
-  .controls{display:flex; align-items:center; gap:16px; row-gap:12px; flex-wrap:wrap; margin-bottom:26px;}
+  .composer-bar{display:flex; align-items:center; gap:14px; row-gap:12px; flex-wrap:wrap; margin:18px 0;}
   .rec{
     position:relative;
     background:linear-gradient(140deg,var(--accent),var(--accent-2));
@@ -298,14 +323,15 @@
     letter-spacing:.1em; font-weight:600; margin:0 0 9px 2px;
   }
   textarea{
-    width:100%; min-height:148px;
-    background:var(--surface); border:1px solid var(--border);
+    width:100%; min-height:140px;
+    background:var(--surface-2); border:1px solid var(--border);
     color:var(--text); border-radius:var(--radius);
     padding:15px 16px; font-size:15px; line-height:1.55;
-    resize:vertical; font-family:inherit; transition:border-color .15s ease, box-shadow .15s ease;
+    resize:vertical; font-family:inherit;
+    transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
   }
   textarea::placeholder{color:var(--text-faint);}
-  textarea:focus{outline:none; border-color:var(--accent-text); box-shadow:0 0 0 3px var(--accent-glow);}
+  textarea:focus{outline:none; background:var(--surface); border-color:var(--accent-text); box-shadow:0 0 0 3px var(--accent-glow);}
 
   .status{font-size:14px; color:var(--text-dim); margin:16px 0 0; min-height:20px;}
   .status.work{color:var(--accent-text);}
@@ -411,50 +437,60 @@
 </head>
 <body>
   <aside>
-    <div class="wordmark"><span class="seed"></span><h1>Muesli</h1></div>
+    <div class="wordmark" onclick="newRecording()" title="Nueva grabación">
+      <span class="seed"></span><h1>Muesli</h1>
+    </div>
+    <button class="new-rec" onclick="newRecording()"><span class="plus">＋</span> Nueva grabación</button>
     <div class="side-section">
       <div class="eyebrow">Grabaciones</div>
       <input id="search" class="search" placeholder="Buscar reuniones…" oninput="renderList(this.value)" />
       <div id="list"></div>
     </div>
     <div id="recoverable" class="side-section"></div>
-    <button class="settings-btn" onclick="openSettings()">⚙ Configuración</button>
+    <div class="side-bottom">
+      <button class="settings-btn" onclick="openSettings()">⚙ Configuración</button>
+      <div class="side-foot">Local y privado · todo corre en tu Mac</div>
+    </div>
   </aside>
 
   <main>
     <div id="setupBanner" class="setup-banner" style="display:none"></div>
-    <input id="title" class="title" placeholder="Título de la grabación…" />
 
-    <div class="meta">
-      <select id="ctype" class="select" title="Tipo de grabación"></select>
-      <input id="context" class="ctx" placeholder="Contexto: tema, asistentes, materia… (opcional)" />
-    </div>
+    <div id="composer" class="composer">
+      <div class="composer-eyebrow">Nueva grabación</div>
+      <input id="title" class="title" placeholder="Título de la grabación…" />
 
-    <div class="controls">
-      <button id="recBtn" class="rec" onclick="toggle()">
-        <span id="recLabel">● Grabar</span>
-      </button>
-      <span id="timer" class="timer"></span>
-      <div class="seg" id="audioMode" title="Qué se graba">
-        <button type="button" class="seg-btn active" data-mode="full">Salida + micrófono</button>
-        <button type="button" class="seg-btn" data-mode="output">Solo salida</button>
+      <div class="meta">
+        <select id="ctype" class="select" title="Tipo de grabación"></select>
+        <input id="context" class="ctx" placeholder="Contexto: tema, asistentes, materia… (opcional)" />
       </div>
-    </div>
-    <div class="kbd-hint"><kbd>espacio</kbd> grabar/detener · <kbd>/</kbd> buscar</div>
 
-    <div class="label">Mis notas</div>
-    <textarea id="notes" placeholder="Anotá lo que te importa mientras hablan…&#10;• decisión sobre precios&#10;• pendiente: enviar propuesta"></textarea>
+      <div class="composer-bar">
+        <button id="recBtn" class="rec" onclick="toggle()">
+          <span id="recLabel">● Grabar</span>
+        </button>
+        <span id="timer" class="timer"></span>
+        <div class="seg" id="audioMode" title="Qué se graba">
+          <button type="button" class="seg-btn active" data-mode="full">Salida + micrófono</button>
+          <button type="button" class="seg-btn" data-mode="output">Solo salida</button>
+        </div>
+      </div>
 
-    <div id="livePanel" class="live-panel" style="display:none">
-      <div class="meter-row">
-        <span class="meter-label">Audio</span>
-        <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
-        <span id="signalPill" class="signal-pill idle">esperando señal…</span>
-        <button id="pauseBtn" class="pause-btn" onclick="togglePause()">⏸ Pausar</button>
+      <div id="livePanel" class="live-panel" style="display:none">
+        <div class="meter-row">
+          <span class="meter-label">Audio</span>
+          <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
+          <span id="signalPill" class="signal-pill idle">esperando señal…</span>
+          <button id="pauseBtn" class="pause-btn" onclick="togglePause()">⏸ Pausar</button>
+        </div>
+        <div id="liveTranscript" class="live-transcript">
+          <span class="lt-empty">La transcripción va apareciendo a medida que se completan los segmentos…</span>
+        </div>
       </div>
-      <div id="liveTranscript" class="live-transcript">
-        <span class="lt-empty">La transcripción va apareciendo a medida que se completan los segmentos…</span>
-      </div>
+
+      <div class="label">Mis notas</div>
+      <textarea id="notes" placeholder="Anotá lo que te importa mientras hablan…&#10;• decisión sobre precios&#10;• pendiente: enviar propuesta"></textarea>
+      <div class="kbd-hint"><kbd>espacio</kbd> grabar/detener · <kbd>/</kbd> buscar</div>
     </div>
 
     <div id="status" class="status"></div>
@@ -642,6 +678,10 @@ async function start() {
   });
   const data = await r.json();
   if (data.error) { setStatus("⚠️ " + data.error); return; }
+  // Asegurá la vista de compositor (con el panel en vivo y el botón Detener).
+  document.getElementById("result").innerHTML = "";
+  activeId = null;
+  showComposer();
   recording = true;
   setModeEnabled(false);
   paused = false; pausedMs = 0; pauseStart = 0;
@@ -705,6 +745,7 @@ async function pollStatus() {
       noteId: (s.result.note || {}).id, title: (s.result.note || {}).title,
       createdAt: (s.result.note || {}).created_at,
     });
+    showNoteView();  // la grabación terminó: mostrá la nota, ocultá el compositor
     await loadList();
     await loadRecoverable();
     loadHealth();
@@ -945,6 +986,20 @@ async function purgeNoteAudio(id) {
   } catch (e) { setStatus("⚠️ No se pudo liberar el audio."); }
 }
 
+function showComposer() { document.getElementById("composer").style.display = ""; }
+function showNoteView() { document.getElementById("composer").style.display = "none"; }
+
+function newRecording() {
+  if (recording) return;  // no interrumpir una grabación en curso
+  activeId = null;
+  clearComposer();
+  document.getElementById("result").innerHTML = "";
+  setStatus("");
+  showComposer();
+  renderList(document.getElementById("search").value);
+  const t = document.getElementById("title"); if (t) t.focus();
+}
+
 async function openNote(id) {
   activeId = id;
   const r = await fetch("/api/notes/" + id);
@@ -952,6 +1007,7 @@ async function openNote(id) {
   setStatus("");
   render({ summary: n.summary, transcript: n.transcript, noteId: n.id,
            title: n.title, createdAt: n.created_at, hasAudio: n.has_audio });
+  if (!recording) showNoteView();  // ver nota a pantalla completa (salvo si estás grabando)
   await loadList();
 }
 
@@ -982,6 +1038,7 @@ async function deleteNote(event, id) {
     activeId = null;
     document.getElementById("result").innerHTML = "";
     setStatus("");
+    showComposer();  // volvé al compositor de nueva grabación
   }
   await loadList();
 }
