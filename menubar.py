@@ -62,8 +62,8 @@ def start_flask():
 
 # Cadencia del sondeo de estado: rápido cuando hay actividad, lento en reposo
 # (para no despertar la CPU ni hacer requests cada segundo sin necesidad → menos batería).
-ACTIVE_INTERVAL = 1.0   # grabando o procesando
-IDLE_INTERVAL = 5.0     # en reposo
+ACTIVE_INTERVAL = 1.0    # grabando o procesando
+IDLE_INTERVAL = 10.0     # en reposo
 
 
 class MuesliBar(rumps.App):
