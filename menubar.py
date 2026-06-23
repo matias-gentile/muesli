@@ -60,6 +60,12 @@ def start_flask():
                       use_reloader=False, threaded=True)
 
 
+# Cadencia del sondeo de estado: rápido cuando hay actividad, lento en reposo
+# (para no despertar la CPU ni hacer requests cada segundo sin necesidad → menos batería).
+ACTIVE_INTERVAL = 1.0   # grabando o procesando
+IDLE_INTERVAL = 5.0     # en reposo
+
+
 class MuesliBar(rumps.App):
     def __init__(self):
         super().__init__("Muesli", title="🎙️", quit_button=None)
@@ -92,7 +98,8 @@ class MuesliBar(rumps.App):
         self._build_output_menu()
         self._panel_proc = None
 
-        self.timer = rumps.Timer(self.tick, 1.0)
+        self._interval = ACTIVE_INTERVAL
+        self.timer = rumps.Timer(self.tick, ACTIVE_INTERVAL)
         self.timer.start()
 
     # ---- modo de audio ----
@@ -191,6 +198,18 @@ class MuesliBar(rumps.App):
         rumps.quit_application()
 
     # ---- polling de estado ----
+    def _set_interval(self, interval):
+        """Cambia la cadencia del timer (rápido/lento) sin recrearlo a mano."""
+        if abs(interval - self._interval) < 0.01:
+            return
+        self._interval = interval
+        try:
+            self.timer.stop()
+            self.timer.interval = interval
+            self.timer.start()
+        except Exception:
+            pass
+
     def tick(self, _):
         try:
             s = api_get("/api/status")
@@ -198,6 +217,11 @@ class MuesliBar(rumps.App):
             return  # Flask todavía arrancando o sin respuesta momentánea
 
         rec = bool(s.get("recording"))
+        st = s.get("status")
+        # cadencia adaptativa: rápido si hay actividad, lento en reposo (ahorra batería)
+        busy = rec or st in ("transcribing", "summarizing")
+        self._set_interval(ACTIVE_INTERVAL if busy else IDLE_INTERVAL)
+
         # sincroniza con grabaciones iniciadas/paradas desde el panel
         if rec and not self.recording:
             self.recording = True
@@ -215,7 +239,6 @@ class MuesliBar(rumps.App):
             self.status_item.title = "Grabando…"
             return
 
-        st = s.get("status")
         if st == "transcribing":
             done = s.get("done_chunks", 0)
             tot = s.get("total_chunks")
