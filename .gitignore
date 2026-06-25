@@ -18,3 +18,8 @@ models/
 
 # Configuración guardada desde el panel (puede tener tokens)
 settings.json
+
+# Helper nativo compilado (se genera con native/build.sh)
+native/muesli-capture
+native/*.o
+native/*.dSYM
