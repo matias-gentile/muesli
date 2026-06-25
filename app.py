@@ -21,6 +21,7 @@ import storage
 import transcribe
 from audio_capture import ChunkedRecorder, find_input_device, record_test
 from config import RECORDINGS_DIR
+from screen_capture import ScreenCaptureRecorder
 from session import Session
 from summarize import list_templates, summarize, type_label
 
@@ -132,21 +133,28 @@ def start():
     # "full" = salida del sistema + micrófono; "output" = solo salida del sistema.
     mode = data.get("mode", "full")
     device = config.get("AUDIO_DEVICE_OUTPUT_ONLY") if mode == "output" else config.get("AUDIO_DEVICE_NAME")
+    backend = config.get("CAPTURE_BACKEND", "blackhole")
 
     global auto_stop_reason
     auto_stop_reason = None
     try:
         session = Session()
-        recorder = ChunkedRecorder(device_name=device, on_chunk=session.add_chunk,
-                                   chunk_seconds=config.get_int("CHUNK_SECONDS", 600))
+        chunk_seconds = config.get_int("CHUNK_SECONDS", 600)
+        if backend == "screencapturekit":
+            # Captura del audio del sistema con el helper nativo (sin Audio MIDI).
+            recorder = ScreenCaptureRecorder(on_chunk=session.add_chunk,
+                                             chunk_seconds=chunk_seconds)
+        else:
+            recorder = ChunkedRecorder(device_name=device, on_chunk=session.add_chunk,
+                                       chunk_seconds=chunk_seconds)
         recorder.start()
-    except Exception as e:  # dispositivo no encontrado, permisos, etc.
+    except Exception as e:  # dispositivo/binario no encontrado, permisos, etc.
         return jsonify({"error": str(e)}), 400
 
     # Monitor de auto-stop (silencio / duración máxima), si alguno está activo.
     if config.get_int("AUTO_STOP_SILENCE_MIN", 0) > 0 or config.get_int("MAX_RECORDING_MIN", 0) > 0:
         threading.Thread(target=_auto_stop_monitor, args=(recorder,), daemon=True).start()
-    return jsonify({"status": "recording", "mode": mode})
+    return jsonify({"status": "recording", "mode": mode, "backend": backend})
 
 
 @app.route("/api/stop", methods=["POST"])

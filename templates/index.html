@@ -568,6 +568,14 @@
       <div class="modal-body">
         <div id="settingsHealth"></div>
         <label class="fld">
+          <span>Fuente de captura</span>
+          <select id="setBackend" onchange="updateBackendHint()">
+            <option value="blackhole">BlackHole — sistema + micrófono (requiere Audio MIDI)</option>
+            <option value="screencapturekit">ScreenCaptureKit — audio del sistema (sin configurar nada)</option>
+          </select>
+        </label>
+        <div class="test-hint" id="backendHint"></div>
+        <label class="fld">
           <span>Dispositivo de audio — Salida + micrófono</span>
           <select id="setDevFull"></select>
         </label>
@@ -763,6 +771,9 @@ async function start() {
   });
   const data = await r.json();
   if (data.error) { setStatus("⚠️ " + data.error); return; }
+  // ScreenCaptureKit no soporta pausa todavía: ocultá el botón en ese modo.
+  const pb = document.getElementById("pauseBtn");
+  if (pb) pb.style.display = (data.backend === "screencapturekit") ? "none" : "";
   // Asegurá la vista de compositor (con el panel en vivo y el botón Detener).
   document.getElementById("result").innerHTML = "";
   activeId = null;
@@ -855,6 +866,8 @@ function finishStop() {
   document.getElementById("recBtn").classList.remove("recording");
   document.getElementById("recLabel").textContent = "● Grabar";
   document.getElementById("cancelBtn").style.display = "none";
+  const pb = document.getElementById("pauseBtn");
+  if (pb) pb.style.display = "";
   document.getElementById("timer").textContent = "";
   setModeEnabled(true);
 }
@@ -1215,6 +1228,18 @@ async function recoverFolder(folder, label) {
   }
 }
 
+function updateBackendHint() {
+  const v = document.getElementById("setBackend").value;
+  const el = document.getElementById("backendHint");
+  if (v === "screencapturekit") {
+    el.innerHTML = "Graba el audio del sistema con ScreenCaptureKit — <b>sin BlackHole ni Audio MIDI</b>. " +
+      "Pide permiso de <b>Grabación de pantalla</b>. Por ahora capta solo el sistema (sin micrófono) y no permite pausar. " +
+      "Requiere compilar el helper: <code>cd native && ./build.sh</code>.";
+  } else {
+    el.textContent = "Graba sistema + micrófono vía BlackHole. Necesita el dispositivo agregado y los Multi-Output en Audio MIDI.";
+  }
+}
+
 async function openSettings() {
   document.getElementById("settingsOverlay").style.display = "flex";
   document.getElementById("testResult").textContent = "";
@@ -1224,6 +1249,8 @@ async function openSettings() {
   try { s = await (await fetch("/api/settings")).json(); } catch (e) {}
   fillDeviceSelect("setDevFull", s.AUDIO_DEVICE_NAME);
   fillDeviceSelect("setDevOut", s.AUDIO_DEVICE_OUTPUT_ONLY);
+  document.getElementById("setBackend").value = s.CAPTURE_BACKEND || "blackhole";
+  updateBackendHint();
   document.getElementById("setClaude").value = s.CLAUDE_MODEL || "";
   document.getElementById("setWhisper").value = s.WHISPER_MODEL || "base";
   document.getElementById("setChunk").value = s.CHUNK_SECONDS || "600";
@@ -1255,6 +1282,7 @@ async function saveSettings() {
     CLAUDE_MODEL: document.getElementById("setClaude").value.trim(),
     WHISPER_MODEL: document.getElementById("setWhisper").value,
     CHUNK_SECONDS: document.getElementById("setChunk").value,
+    CAPTURE_BACKEND: document.getElementById("setBackend").value,
     AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
     MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,
     NOTION_DATABASE_ID: document.getElementById("setNotionDb").value.trim(),

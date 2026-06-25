@@ -327,6 +327,18 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 
 ## Configuración (`.env`)
 
+> ### Fuente de captura: BlackHole o ScreenCaptureKit
+> En **⚙ Configuración → Fuente de captura** elegís cómo se graba el audio:
+> - **BlackHole** (por defecto): sistema **+ micrófono**, vía el driver virtual y los
+>   dispositivos de Audio MIDI (lo de siempre).
+> - **ScreenCaptureKit**: graba el **audio del sistema sin BlackHole ni Audio MIDI**
+>   (macOS 13+). Solo pide permiso de **Grabación de pantalla**. Por ahora capta **solo
+>   el sistema** (sin micrófono) y **no permite pausar**. Requiere compilar el helper una
+>   vez: `cd native && ./build.sh` (ver [`native/README.md`](native/README.md)).
+>
+> Útil para reuniones donde te alcanza con el audio de los demás (Zoom/Meet) y no querés
+> pelearte con Audio MIDI. Si necesitás tu micrófono, usá BlackHole.
+
 > Desde la app también podés configurar casi todo sin tocar archivos: botón
 > **⚙ Configuración** (barra lateral). Permite elegir el **dispositivo de audio**
 > (con un botón **▶ Probar** que graba 3 s y te dice si entra señal), el **modelo de
@@ -347,6 +359,7 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 | `WHISPER_VAD` | `0` (off, más permisivo con audio bajo) o `1` (descarta silencios) |
 | `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
 | `AUDIO_DEVICE_OUTPUT_ONLY` | Dispositivo para el modo "solo salida" (por defecto `BlackHole`) |
+| `CAPTURE_BACKEND` | `blackhole` (por defecto) o `screencapturekit` (audio del sistema sin Audio MIDI) |
 | `CHUNK_SECONDS` | Duración de cada segmento de grabación (por defecto `600` = 10 min) |
 | `AUTO_STOP_SILENCE_MIN` | Minutos de silencio seguidos antes de cortar sola (`0` = desactivado; por defecto `15`) |
 | `MAX_RECORDING_MIN` | Tope duro de duración en minutos (`0` = desactivado; por defecto `180` = 3 h) |
