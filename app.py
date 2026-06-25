@@ -142,8 +142,10 @@ def start():
         chunk_seconds = config.get_int("CHUNK_SECONDS", 600)
         if backend == "screencapturekit":
             # Captura del audio del sistema con el helper nativo (sin Audio MIDI).
+            # "full" = sistema + micrófono; "output" = solo sistema.
             recorder = ScreenCaptureRecorder(on_chunk=session.add_chunk,
-                                             chunk_seconds=chunk_seconds)
+                                             chunk_seconds=chunk_seconds,
+                                             include_mic=(mode != "output"))
         else:
             recorder = ChunkedRecorder(device_name=device, on_chunk=session.add_chunk,
                                        chunk_seconds=chunk_seconds)

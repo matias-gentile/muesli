@@ -1233,7 +1233,8 @@ function updateBackendHint() {
   const el = document.getElementById("backendHint");
   if (v === "screencapturekit") {
     el.innerHTML = "Graba el audio del sistema con ScreenCaptureKit — <b>sin BlackHole ni Audio MIDI</b>. " +
-      "Pide permiso de <b>Grabación de pantalla</b>. Por ahora capta solo el sistema (sin micrófono) y no permite pausar. " +
+      "Pide permiso de <b>Grabación de pantalla</b> (y de <b>Micrófono</b> si usás \"Salida + micrófono\", en macOS 15+). " +
+      "El toggle de arriba del grabador elige si suma tu micrófono. No permite pausar todavía. " +
       "Requiere compilar el helper: <code>cd native && ./build.sh</code>.";
   } else {
     el.textContent = "Graba sistema + micrófono vía BlackHole. Necesita el dispositivo agregado y los Multi-Output en Audio MIDI.";

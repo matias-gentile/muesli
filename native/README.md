@@ -8,15 +8,17 @@ funcionando igual.
 
 ## Qué hace
 - Captura la mezcla de audio que sale del sistema (lo que escucharías por los parlantes).
-- Escribe **chunks WAV rotativos** (`chunk-000001.wav`, `chunk-000002.wav`, …) en un
-  directorio. Ese es el mismo formato que el pipeline de Python ya sabe transcribir.
-- Solo pide un permiso de **Grabación de pantalla** (no toca tus dispositivos de audio).
+- Con `--include-mic` (macOS 15+) además graba el **micrófono** en archivos paralelos
+  (`mic-000001.wav` junto a `chunk-000001.wav`); la app Python los **mezcla** antes de
+  transcribir (`audio_mix.py`).
+- Escribe **chunks WAV rotativos** (`chunk-000001.wav`, …) en un directorio. Ese es el
+  mismo formato que el pipeline de Python ya sabe transcribir.
+- Pide permiso de **Grabación de pantalla** (y de **Micrófono** si usás `--include-mic`).
 
-> **Pendiente (próximo paso):** este helper captura **solo el audio del sistema**, no el
-> micrófono. Para una reunión, eso ya te trae a los demás (Zoom/Meet). Sumar tu propio
-> mic se hace después: en macOS 15+ con el mic de ScreenCaptureKit, o mezclando con
-> AVAudioEngine en macOS 13–14. Mientras tanto, si necesitás mic, seguí usando el modo
-> BlackHole de siempre.
+> **Permiso de micrófono:** igual que la grabación de pantalla, va a la app desde la que
+> lo corrés. Ajustes del Sistema → **Privacidad y seguridad → Micrófono** → activá tu
+> terminal y **reabrila**. (En macOS 13–14 el `--include-mic` se ignora: graba solo el
+> sistema; el mic por ScreenCaptureKit necesita macOS 15+.)
 
 ## Compilar
 Necesitás las herramientas de línea de comandos de Xcode (si no: `xcode-select --install`).
@@ -51,7 +53,13 @@ la Terminal.)
 cd native
 # Graba 20 segundos en chunks de 10s. Mientras tanto, REPRODUCÍ algo (música, un video).
 ./muesli-capture --out-dir /tmp/muesli-cap --chunk-seconds 10 --max-seconds 20
+# Con micrófono (macOS 15+): agregá --include-mic y hablá mientras grabás.
+./muesli-capture --out-dir /tmp/muesli-cap --chunk-seconds 10 --max-seconds 20 --include-mic
 ```
+
+Con `--include-mic` vas a ver, además de `chunk-0000xx.wav`, archivos `mic-0000xx.wav`.
+La mezcla la hace Python; para probar el flujo completo desde Python:
+`python screen_capture.py 15 mic`.
 
 Qué deberías ver (en la consola): `OUT_DIR …`, `READY`, líneas `LEVEL 0.xxxx` que
 **suben cuando hay audio**, y `CHUNK chunk-0000xx.wav` cada 10s.

@@ -332,9 +332,11 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 > - **BlackHole** (por defecto): sistema **+ micrófono**, vía el driver virtual y los
 >   dispositivos de Audio MIDI (lo de siempre).
 > - **ScreenCaptureKit**: graba el **audio del sistema sin BlackHole ni Audio MIDI**
->   (macOS 13+). Solo pide permiso de **Grabación de pantalla**. Por ahora capta **solo
->   el sistema** (sin micrófono) y **no permite pausar**. Requiere compilar el helper una
->   vez: `cd native && ./build.sh` (ver [`native/README.md`](native/README.md)).
+>   (macOS 13+). En **macOS 15+** además puede sumar tu **micrófono** (el toggle
+>   "Salida + micrófono / Solo salida" del grabador lo controla; la mezcla la hace
+>   Muesli). Pide permiso de **Grabación de pantalla** (y de **Micrófono** si sumás el
+>   mic). Todavía **no permite pausar**. Requiere compilar el helper una vez:
+>   `cd native && ./build.sh` (ver [`native/README.md`](native/README.md)).
 >
 > Útil para reuniones donde te alcanza con el audio de los demás (Zoom/Meet) y no querés
 > pelearte con Audio MIDI. Si necesitás tu micrófono, usá BlackHole.

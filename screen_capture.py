@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 
 from config import RECORDINGS_DIR, BASE_DIR
+from audio_mix import mix_wavs
 
 # Mismo umbral que audio_capture.py: por debajo se considera "silencio" (auto-stop).
 SILENCE_LEVEL = 0.04
@@ -42,9 +43,10 @@ _CHUNK_RE = re.compile(r"^CHUNK\s+(\S+)")
 
 class ScreenCaptureRecorder:
     def __init__(self, on_chunk=None, chunk_seconds: int = 600,
-                 out_dir: Path = RECORDINGS_DIR, helper_path=None):
+                 out_dir: Path = RECORDINGS_DIR, helper_path=None, include_mic: bool = False):
         self.on_chunk = on_chunk or (lambda i, p: None)
         self.chunk_seconds = chunk_seconds
+        self.include_mic = include_mic
         self.helper_path = Path(helper_path or os.getenv("MUESLI_CAPTURE_BIN") or DEFAULT_HELPER)
         ts = time.strftime("%Y%m%d-%H%M%S")
         self.session_dir = Path(out_dir) / f"sck-{ts}"
@@ -71,11 +73,13 @@ class ScreenCaptureRecorder:
         self.recording = True
         self.silent_seconds = 0.0
         self._last_level_ts = time.time()
+        cmd = [str(self.helper_path),
+               "--out-dir", str(self.session_dir),
+               "--chunk-seconds", str(self.chunk_seconds)]
+        if self.include_mic:
+            cmd.append("--include-mic")
         self._proc = subprocess.Popen(
-            [str(self.helper_path),
-             "--out-dir", str(self.session_dir),
-             "--chunk-seconds", str(self.chunk_seconds)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
             text=True, bufsize=1)
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
         self._reader.start()
@@ -146,9 +150,20 @@ class ScreenCaptureRecorder:
 
     def _emit_chunk(self, name: str):
         self._enqueued += 1
-        path = self.session_dir / name
+        sys_path = self.session_dir / name
+        out_path = sys_path
+        # Si grabamos micrófono, mezclá el chunk de sistema con su par de mic.
+        if self.include_mic:
+            mic_path = self.session_dir / name.replace("chunk-", "mic-")
+            if mic_path.exists():
+                mixed = self.session_dir / name.replace("chunk-", "mix-")
+                try:
+                    mix_wavs(sys_path, mic_path, mixed)
+                    out_path = mixed
+                except Exception as e:
+                    print(f"[sck] mezcla falló ({e}); uso solo el sistema")
         try:
-            self.on_chunk(self._enqueued, str(path))
+            self.on_chunk(self._enqueued, str(out_path))
         except Exception as e:
             print(f"[sck] on_chunk error: {e}")
 
@@ -158,15 +173,16 @@ if __name__ == "__main__":
     import sys
 
     secs = int(sys.argv[1]) if len(sys.argv) > 1 else 15
+    want_mic = "mic" in sys.argv[2:]
 
     def cb(i, p):
         size = os.path.getsize(p) if os.path.exists(p) else "??"
         print(f">>> chunk {i} listo: {p} ({size} bytes)")
 
-    rec = ScreenCaptureRecorder(on_chunk=cb, chunk_seconds=5)
+    rec = ScreenCaptureRecorder(on_chunk=cb, chunk_seconds=5, include_mic=want_mic)
     print(f"Helper:  {rec.helper_path}")
     print(f"Carpeta: {rec.session_dir}")
-    print(f"Grabando {secs}s (Ctrl-C para cortar antes)… reproducí algo.")
+    print(f"Micrófono: {'SÍ' if want_mic else 'no'}  ·  Grabando {secs}s (Ctrl-C para cortar)…")
     rec.start()
     try:
         t0 = time.time()
