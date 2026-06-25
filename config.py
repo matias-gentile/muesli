@@ -34,6 +34,8 @@ _DEFAULTS = {
     "AUDIO_DEVICE_NAME": os.getenv("AUDIO_DEVICE_NAME", "Aggregate"),
     "AUDIO_DEVICE_OUTPUT_ONLY": os.getenv("AUDIO_DEVICE_OUTPUT_ONLY", "BlackHole"),
     "CHUNK_SECONDS": os.getenv("CHUNK_SECONDS", "600"),
+    "AUTO_STOP_SILENCE_MIN": os.getenv("AUTO_STOP_SILENCE_MIN", "15"),
+    "MAX_RECORDING_MIN": os.getenv("MAX_RECORDING_MIN", "180"),
     "NOTION_API_KEY": os.getenv("NOTION_API_KEY", ""),
     "NOTION_DATABASE_ID": os.getenv("NOTION_DATABASE_ID", ""),
 }

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import os
 import re
+import threading
+import time
 from pathlib import Path
 
 import sounddevice as sd
@@ -24,6 +26,39 @@ from summarize import list_templates, summarize, type_label
 app = Flask(__name__)
 recorder: ChunkedRecorder | None = None
 session: Session | None = None
+auto_stop_reason: str | None = None  # motivo si la última grabación se detuvo sola
+
+
+def _finish_recording(title="", notes="", ctype="reunion", context="", auto_reason=None) -> bool:
+    """Detiene la grabación en curso y arranca el procesado. Compartido por /api/stop
+    y el auto-stop. Devuelve False si no había nada grabando."""
+    global recorder, session, auto_stop_reason
+    if recorder is None or not recorder.recording:
+        return False
+    auto_stop_reason = auto_reason
+    total = recorder.stop()
+    session.finish(total, recorder.peak, title, notes, ctype, context, str(recorder.session_dir))
+    return True
+
+
+def _auto_stop_monitor(rec):
+    """Corre en segundo plano mientras se graba: corta sola si hay demasiado silencio
+    seguido, o si se pasa del límite máximo de duración."""
+    silence_limit = config.get_int("AUTO_STOP_SILENCE_MIN", 0) * 60
+    max_limit = config.get_int("MAX_RECORDING_MIN", 0) * 60
+    started = time.time()
+    while True:
+        time.sleep(3)
+        if rec is not recorder or not rec.recording:
+            return  # se frenó, o ya hay otra grabación
+        reason = None
+        if silence_limit and rec.silent_seconds >= silence_limit:
+            reason = f"{silence_limit // 60} min sin audio"
+        elif max_limit and (time.time() - started) >= max_limit:
+            reason = f"límite de {max_limit // 60} min"
+        if reason:
+            _finish_recording(auto_reason=reason)
+            return
 
 
 @app.route("/")
@@ -97,6 +132,8 @@ def start():
     mode = data.get("mode", "full")
     device = config.get("AUDIO_DEVICE_OUTPUT_ONLY") if mode == "output" else config.get("AUDIO_DEVICE_NAME")
 
+    global auto_stop_reason
+    auto_stop_reason = None
     try:
         session = Session()
         recorder = ChunkedRecorder(device_name=device, on_chunk=session.add_chunk,
@@ -104,6 +141,10 @@ def start():
         recorder.start()
     except Exception as e:  # dispositivo no encontrado, permisos, etc.
         return jsonify({"error": str(e)}), 400
+
+    # Monitor de auto-stop (silencio / duración máxima), si alguno está activo.
+    if config.get_int("AUTO_STOP_SILENCE_MIN", 0) > 0 or config.get_int("MAX_RECORDING_MIN", 0) > 0:
+        threading.Thread(target=_auto_stop_monitor, args=(recorder,), daemon=True).start()
     return jsonify({"status": "recording", "mode": mode})
 
 
@@ -114,11 +155,10 @@ def stop():
         return jsonify({"error": "no se está grabando"}), 400
 
     data = request.get_json(silent=True) or {}
-    total = recorder.stop()  # finaliza el último chunk; los chunks ya fueron encolados
-    session.finish(total, recorder.peak,
-                   data.get("title", ""), data.get("notes", ""),
-                   data.get("context_type", "reunion"), data.get("context", ""),
-                   str(recorder.session_dir))
+    _finish_recording(
+        data.get("title", ""), data.get("notes", ""),
+        data.get("context_type", "reunion"), data.get("context", ""),
+    )
     return jsonify({"status": "processing"})
 
 
@@ -126,6 +166,7 @@ def stop():
 def status():
     snap = session.snapshot() if session is not None else {"status": "idle"}
     snap["recording"] = bool(recorder is not None and recorder.recording)
+    snap["auto_stop_reason"] = auto_stop_reason
     return jsonify(snap)
 
 
@@ -141,6 +182,7 @@ def level():
         "peak": float(recorder.peak) if rec else 0.0,
         "partial": live["partial"],
         "done_chunks": live["done_chunks"],
+        "auto_stop_reason": auto_stop_reason,
     })
 
 

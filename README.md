@@ -272,6 +272,33 @@ un `WHISPER_MODEL` más chico.
 
 ---
 
+## Que se apague sola (auto-stop)
+
+Para no depender de acordarte de frenar la grabación cuando la reunión termina,
+Muesli puede **cortar solo** y procesar lo grabado. Hay dos cortes, ambos en
+**⚙ Configuración**:
+
+- **Auto-detener tras silencio** *(por defecto: 15 min)*: si pasan X minutos
+  seguidos **sin audio** (por debajo de un umbral), corta sola. Una sola palabra
+  (o cualquier sonido) reinicia el contador, así que no te va a cortar una reunión
+  que sigue, aunque tenga pausas largas — solo cuando de verdad quedó en silencio.
+  Opciones: *Desactivado / 5 / 10 / 15 / 30 min*.
+- **Límite máximo de grabación** *(por defecto: 3 h)*: un tope duro, sin importar
+  el audio, por si quedó algo sonando de fondo. Opciones: *Desactivado / 1–4 h*.
+
+El control corre en el **backend**, así que funciona igual la dispares desde el
+navegador o desde la **barra de menú**. Cuando se apaga sola te **avisa** (notificación
+del sistema en modo barra de menú; mensaje en el panel) y arranca el resumen como
+siempre. La nota queda con un **título por defecto** (la grabación automática no toma
+el título que tipeaste en el panel) — la podés **renombrar** después.
+
+> El umbral de "silencio" depende de tu ambiente (ruido de fondo, hum del aire, etc.).
+> Si tu sala tiene un zumbido constante por encima del umbral, el corte por silencio
+> podría no dispararse: para esos casos está el **límite máximo de duración**, que es
+> independiente del audio. El umbral vive en `SILENCE_LEVEL` (en `audio_capture.py`).
+
+---
+
 ## Si el resumen falla (cortes de red, etc.)
 
 El resumen es el único paso que usa internet (la llamada a la API de Claude). Si
@@ -316,6 +343,8 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 | `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
 | `AUDIO_DEVICE_OUTPUT_ONLY` | Dispositivo para el modo "solo salida" (por defecto `BlackHole`) |
 | `CHUNK_SECONDS` | Duración de cada segmento de grabación (por defecto `600` = 10 min) |
+| `AUTO_STOP_SILENCE_MIN` | Minutos de silencio seguidos antes de cortar sola (`0` = desactivado; por defecto `15`) |
+| `MAX_RECORDING_MIN` | Tope duro de duración en minutos (`0` = desactivado; por defecto `180` = 3 h) |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
 | `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
 

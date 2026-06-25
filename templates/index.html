@@ -592,6 +592,26 @@
           <span>Duración de cada segmento (segundos)</span>
           <input id="setChunk" type="number" min="30" step="30" />
         </label>
+        <label class="fld">
+          <span>Auto-detener tras silencio</span>
+          <select id="setAutoStop">
+            <option value="0">Desactivado</option>
+            <option value="5">5 min sin audio</option>
+            <option value="10">10 min sin audio</option>
+            <option value="15">15 min sin audio</option>
+            <option value="30">30 min sin audio</option>
+          </select>
+        </label>
+        <label class="fld">
+          <span>Límite máximo de grabación</span>
+          <select id="setMaxRec">
+            <option value="0">Desactivado</option>
+            <option value="60">1 hora</option>
+            <option value="120">2 horas</option>
+            <option value="180">3 horas</option>
+            <option value="240">4 horas</option>
+          </select>
+        </label>
 
         <div class="fld-sep">Notion (opcional)</div>
         <label class="fld">
@@ -695,7 +715,10 @@ function stopLiveMeter() {
 async function pollLevel() {
   let d;
   try { d = await (await fetch("/api/level")).json(); } catch (e) { return; }
-  if (!d.recording) return;
+  if (!d.recording) {
+    if (recording) onExternalStop(d.auto_stop_reason);  // se detuvo sola (auto-stop)
+    return;
+  }
   if (paused || d.paused) {
     document.getElementById("meterFill").style.width = "0%";
     const pill = document.getElementById("signalPill");
@@ -822,6 +845,17 @@ function finishStop() {
   document.getElementById("recLabel").textContent = "● Grabar";
   document.getElementById("timer").textContent = "";
   setModeEnabled(true);
+}
+
+function onExternalStop(reason) {
+  // La grabación terminó por su cuenta (auto-stop por silencio o duración máxima).
+  if (!recording) return;
+  recording = false;
+  finishStop();
+  const msg = reason ? `Detenida automáticamente (${reason}). Procesando…`
+                     : "Grabación detenida. Procesando…";
+  setStatus("⏹ " + msg);
+  pollStatus();
 }
 
 function clearComposer() {
@@ -1166,6 +1200,8 @@ async function openSettings() {
   document.getElementById("setClaude").value = s.CLAUDE_MODEL || "";
   document.getElementById("setWhisper").value = s.WHISPER_MODEL || "base";
   document.getElementById("setChunk").value = s.CHUNK_SECONDS || "600";
+  document.getElementById("setAutoStop").value = s.AUTO_STOP_SILENCE_MIN || "0";
+  document.getElementById("setMaxRec").value = s.MAX_RECORDING_MIN || "0";
   document.getElementById("setNotionKey").value = "";
   document.getElementById("setNotionKey").placeholder =
     s.NOTION_API_KEY_set ? "•••••• configurado — vacío = no cambiar" : "dejá vacío para no cambiar";
@@ -1192,6 +1228,8 @@ async function saveSettings() {
     CLAUDE_MODEL: document.getElementById("setClaude").value.trim(),
     WHISPER_MODEL: document.getElementById("setWhisper").value,
     CHUNK_SECONDS: document.getElementById("setChunk").value,
+    AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
+    MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,
     NOTION_DATABASE_ID: document.getElementById("setNotionDb").value.trim(),
   };
   const nk = document.getElementById("setNotionKey").value.trim();

@@ -18,6 +18,9 @@ import soundfile as sf
 
 from config import RECORDINGS_DIR, AUDIO_DEVICE_NAME, CHUNK_SECONDS
 
+# Por debajo de este nivel (0..1) consideramos un bloque como "silencio" para el auto-stop.
+SILENCE_LEVEL = 0.04
+
 
 def find_input_device(name: str):
     """Devuelve el índice del primer dispositivo de entrada que contenga `name`, o None."""
@@ -63,6 +66,7 @@ class ChunkedRecorder:
         self.paused = False  # en pausa: no captura audio (la grabación sigue abierta)
         self.peak = 0.0  # amplitud máxima vista (0..1), para detectar silencio
         self.level = 0.0  # nivel instantáneo (0..1), para el medidor en vivo
+        self.silent_seconds = 0.0  # segundos seguidos por debajo de SILENCE_LEVEL (auto-stop)
         self._chunk_index = 0
         self._chunk_file = None
         self._chunk_path = None
@@ -95,6 +99,12 @@ class ChunkedRecorder:
         self.level = lvl
         if lvl > self.peak:
             self.peak = lvl
+        # silencio acumulado para el auto-stop: suma mientras el nivel es muy bajo, se
+        # reinicia apenas entra audio (una palabra cada tanto resetea el contador).
+        if lvl < SILENCE_LEVEL:
+            self.silent_seconds += frames / self.samplerate
+        else:
+            self.silent_seconds = 0.0
         self._q.put(mono.copy())
 
     def _open_chunk(self):
@@ -143,6 +153,7 @@ class ChunkedRecorder:
     def start(self):
         self.recording = True
         self.paused = False
+        self.silent_seconds = 0.0
         self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self._writer_thread.start()
         self._stream = sd.InputStream(

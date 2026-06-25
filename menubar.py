@@ -232,6 +232,9 @@ class MuesliBar(rumps.App):
             self.recording = False
             self._t0 = None
             self.record_item.title = "● Grabar"
+            # si se cortó sola (silencio/duración), avisá; el "Resumen listo" llega después.
+            if s.get("auto_stop_reason"):
+                notify("Muesli", f"Grabación detenida sola ({s['auto_stop_reason']}). Procesando…")
 
         if rec:
             el = int(time.time() - (self._t0 or time.time()))
