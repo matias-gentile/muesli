@@ -93,8 +93,22 @@ final class Capture: NSObject, SCStreamOutput, SCStreamDelegate {
         audioFile = nil
         chunkIndex += 1
         let url = outDir.appendingPathComponent(String(format: "chunk-%06d.wav", chunkIndex))
+        // En disco: WAV PCM 16-bit ENTRELAZADO (lo que WAV requiere y lee cualquier cosa).
+        // En memoria seguimos el formato que entrega ScreenCaptureKit (Float32, no
+        // entrelazado) para que write(from:) calce sin conversiones a mano; AVAudioFile
+        // convierte al escribir. Sin AVLinearPCMIsNonInterleaved → desaparece el warning.
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: format.sampleRate,
+            AVNumberOfChannelsKey: format.channelCount,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+        ]
         do {
-            audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
+            audioFile = try AVAudioFile(forWriting: url, settings: settings,
+                                        commonFormat: format.commonFormat,
+                                        interleaved: format.isInterleaved)
             chunkStart = Date()
             emit("CHUNK \(url.lastPathComponent)")
         } catch {
