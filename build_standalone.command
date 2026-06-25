@@ -20,6 +20,24 @@ echo ""
 echo "1/4 · Compilando el helper de captura (ScreenCaptureKit)…"
 ( cd native && ./build.sh )
 
+# 1.5) Regenerar el ícono .icns de forma NATIVA (iconutil), más confiable que el de Python.
+if [ -f assets/icon.png ]; then
+  echo ""
+  echo "1.5 · Regenerando icono .icns nativo (iconutil)…"
+  ICONSET="$(mktemp -d)/icon.iconset"
+  mkdir -p "$ICONSET"
+  for s in 16 32 128 256 512; do
+    sips -z $s $s assets/icon.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null 2>&1
+    d=$((s * 2))
+    sips -z $d $d assets/icon.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null 2>&1
+  done
+  if iconutil -c icns "$ICONSET" -o assets/icon.icns 2>/dev/null; then
+    echo "   ✓ assets/icon.icns regenerado de forma nativa"
+  else
+    echo "   (iconutil falló; uso el icon.icns que ya estaba)"
+  fi
+fi
+
 # 2) Asegurar PyInstaller.
 echo ""
 echo "2/4 · Asegurando PyInstaller…"
@@ -46,7 +64,10 @@ codesign --force --deep --sign - "$APP" 2>/dev/null || \
 DEST="$HOME/Desktop/Muesli.app"
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
+touch "$DEST"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DEST" 2>/dev/null || true
+# Refrescar el caché de íconos para que el ícono nuevo aparezca enseguida.
+killall Dock 2>/dev/null || true
 
 echo ""
 echo "✓ Listo:  $DEST"
