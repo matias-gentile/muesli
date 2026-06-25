@@ -30,6 +30,7 @@ class Session:
         self.context_type = "reunion"
         self.context = ""
         self.audio_dir = None
+        self._cancelled = False
         self._transcripts: dict[int, str] = {}
         self._lock = threading.Lock()
         self._queue: "queue.Queue" = queue.Queue()
@@ -52,6 +53,12 @@ class Session:
             self.context = context
             self.audio_dir = audio_dir
         self._queue.put(None)  # centinela: no hay más chunks
+
+    def cancel(self):
+        """Aborta la sesión: el worker corta y NO transcribe/resume/guarda nada."""
+        self._cancelled = True
+        self._set(status="cancelled")
+        self._queue.put(None)  # desbloquea al worker para que termine
 
     def snapshot(self):
         with self._lock:
@@ -80,7 +87,7 @@ class Session:
             # Transcribe cada chunk a medida que llega (incluso durante la grabación).
             while True:
                 item = self._queue.get()
-                if item is None:
+                if item is None or self._cancelled:
                     break
                 index, path = item
                 self._set(status="transcribing")
@@ -88,6 +95,10 @@ class Session:
                 with self._lock:
                     self._transcripts[index] = text
                     self.done_chunks += 1
+
+            if self._cancelled:
+                self._set(status="cancelled")
+                return
 
             transcript = "\n".join(
                 self._transcripts[i] for i in sorted(self._transcripts)

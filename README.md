@@ -145,6 +145,9 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
    pase durante la pausa no se graba ni cuenta en el cronómetro). Anotá lo que te importa
    en el área de notas — guían el resumen.
 6. **Detener y resumir**. La app transcribe, resume con Claude según el tipo y guarda.
+   Si arrancaste por error o no querés guardar nada, usá **✕ Cancelar**: descarta la
+   grabación y borra el audio, sin transcribir ni crear ninguna nota. (También está en
+   la barra de menú como *✕ Cancelar grabación*.)
 7. El resumen aparece en pantalla. Podés **renombrar** la reunión (clic en el título),
    **editar el resumen** (✎), **copiarlo** (⧉) o **descargarlo** como `.md` (⤓). En la
    barra lateral, las reuniones se **agrupan por día**, muestran su **tipo** y se pueden
@@ -177,6 +180,8 @@ Vas a ver un 🎙️ en la barra de menú. Desde ahí:
 
 - **● Grabar / ■ Detener**: graba y para. Mientras grabás, el ícono muestra el
   cronómetro (🔴 00:34). Al detener te pide un nombre para la reunión.
+- **✕ Cancelar grabación**: descarta lo que estás grabando (borra el audio, no guarda
+  nota). Pide confirmación.
 - **Estado en vivo**: "Transcribiendo 3/12…", "Resumiendo con Claude…", y una
   **notificación nativa** cuando el resumen está listo.
 - **Fuente de audio**: elegís "Salida + micrófono" o "Solo salida del sistema".

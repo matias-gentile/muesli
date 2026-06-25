@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -160,6 +161,29 @@ def stop():
         data.get("context_type", "reunion"), data.get("context", ""),
     )
     return jsonify({"status": "processing"})
+
+
+@app.route("/api/cancel", methods=["POST"])
+def cancel():
+    """Aborta la grabación en curso: no transcribe ni guarda, y borra el audio."""
+    global recorder, session, auto_stop_reason
+    if recorder is None or not recorder.recording:
+        return jsonify({"error": "no se está grabando"}), 400
+
+    auto_stop_reason = None
+    session_dir = recorder.session_dir
+    recorder.stop()              # cierra el stream (el último chunk se descarta igual)
+    if session is not None:
+        session.cancel()         # el worker corta sin guardar nada
+    # Descartá el audio grabado: esta sesión no se va a procesar.
+    try:
+        if session_dir and Path(session_dir).exists():
+            shutil.rmtree(session_dir, ignore_errors=True)
+    except Exception as e:
+        print(f"[cancel] no se pudo borrar {session_dir}: {e}")
+    recorder = None
+    session = None
+    return jsonify({"status": "cancelled"})
 
 
 @app.route("/api/status")

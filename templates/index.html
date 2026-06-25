@@ -332,6 +332,12 @@
   .rec:disabled::after{display:none;}
   .pulse{width:9px; height:9px; border-radius:50%; background:#fff; animation:p 1.1s ease-in-out infinite;}
   @keyframes p{0%,100%{opacity:1;} 50%{opacity:.3;}}
+  .cancel-rec{
+    border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim);
+    padding:10px 16px; border-radius:999px; font-size:14px; font-weight:500; cursor:pointer;
+    transition:all .15s ease;
+  }
+  .cancel-rec:hover{border-color:var(--rec); color:var(--rec); background:var(--surface-3);}
   .timer{font-variant-numeric:tabular-nums; color:var(--text-dim); font-size:16px; font-weight:500;}
   .seg{
     display:inline-flex; margin-left:auto;
@@ -523,6 +529,8 @@
         <button id="recBtn" class="rec" onclick="toggle()">
           <span id="recLabel">● Grabar</span>
         </button>
+        <button id="cancelBtn" class="cancel-rec" onclick="cancelRecording()" style="display:none"
+                title="Descartar esta grabación sin guardar">✕ Cancelar</button>
         <span id="timer" class="timer"></span>
         <div class="seg" id="audioMode" title="Qué se graba">
           <button type="button" class="seg-btn active" data-mode="full">Salida + micrófono</button>
@@ -768,6 +776,7 @@ async function start() {
   startLiveMeter();
   const btn = document.getElementById("recBtn");
   btn.classList.add("recording");
+  document.getElementById("cancelBtn").style.display = "";
   document.getElementById("recLabel").innerHTML =
     '<span class="pulse"></span> Detener y resumir';
   const modeLabel = audioMode === "output" ? "solo salida" : "salida + micrófono";
@@ -840,11 +849,29 @@ async function pollStatus() {
 
 function finishStop() {
   stopLiveMeter();
+  clearInterval(timerId);
   paused = false;
   document.getElementById("recBtn").disabled = false;
+  document.getElementById("recBtn").classList.remove("recording");
   document.getElementById("recLabel").textContent = "● Grabar";
+  document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("timer").textContent = "";
   setModeEnabled(true);
+}
+
+function cancelRecording() {
+  if (!recording) return;
+  if (!confirm("¿Cancelar la grabación? Se descarta el audio y no se guarda ninguna nota.")) return;
+  recording = false;          // evita que pollLevel dispare onExternalStop
+  paused = false;
+  clearInterval(timerId);
+  stopLiveMeter();
+  setStatus("Cancelando…", true);
+  fetch("/api/cancel", { method: "POST" }).catch(() => {}).finally(() => {
+    finishStop();
+    document.getElementById("result").innerHTML = "";
+    setStatus("Grabación cancelada — no se guardó nada.");
+  });
 }
 
 function onExternalStop(reason) {

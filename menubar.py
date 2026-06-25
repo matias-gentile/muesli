@@ -87,6 +87,7 @@ class MuesliBar(rumps.App):
 
         self.menu = [
             self.record_item,
+            rumps.MenuItem("✕ Cancelar grabación", callback=self.cancel_record),
             self.status_item,
             None,
             mode_menu,
@@ -185,6 +186,25 @@ class MuesliBar(rumps.App):
             self._t0 = None
             self.record_item.title = "● Grabar"
             self.title = "⏳"
+
+    def cancel_record(self, _):
+        if not self.recording:
+            notify("Muesli", "No hay ninguna grabación en curso.")
+            return
+        if rumps.alert("Cancelar grabación",
+                       "Se descarta el audio y no se guarda ninguna nota. ¿Seguro?",
+                       ok="Cancelar grabación", cancel="Volver") != 1:
+            return
+        try:
+            api_post("/api/cancel", {})
+        except Exception as e:
+            notify("Muesli", f"No se pudo cancelar: {e}")
+        self.recording = False
+        self._t0 = None
+        self._notified = True  # no dispares la notificación de "detenida sola"
+        self.record_item.title = "● Grabar"
+        self.title = "🎙️"
+        self.status_item.title = "Grabación cancelada"
 
     # ---- panel (ventana nativa, sin navegador) ----
     def open_panel(self, _):
