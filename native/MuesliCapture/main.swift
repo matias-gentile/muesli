@@ -17,6 +17,7 @@ import Foundation
 import ScreenCaptureKit
 import AVFoundation
 import CoreMedia
+import CoreGraphics
 
 func emit(_ s: String) {
     FileHandle.standardError.write((s + "\n").data(using: .utf8)!)
@@ -151,6 +152,24 @@ final class Capture: NSObject, SCStreamOutput, SCStreamDelegate {
 guard #available(macOS 13.0, *) else {
     emit("FATAL: se requiere macOS 13 o superior (ScreenCaptureKit).")
     exit(1)
+}
+
+// Permiso de Grabación de pantalla (TCC). Si falta, intentamos disparar el diálogo del
+// sistema; si igual no se concede, explicamos cómo arreglarlo a mano.
+if !CGPreflightScreenCaptureAccess() {
+    emit("PERMISO: falta 'Grabación de pantalla'. Pidiéndolo al sistema…")
+    let granted = CGRequestScreenCaptureAccess()
+    if !granted {
+        emit("FATAL: la app desde la que corrés esto no tiene permiso de 'Grabación de pantalla'.")
+        emit("Arreglo:")
+        emit("  1) Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla.")
+        emit("  2) Activá (o agregá con +) la app que usás para correr esto:")
+        emit("     Terminal.app, iTerm, o 'Code' si es la terminal de VS Code.")
+        emit("  3) IMPORTANTE: cerrá esa app por completo (Cmd+Q) y volvé a abrirla.")
+        emit("  4) Reintentá. (Un primer 'Deny' deja el permiso bloqueado: hay que activarlo a mano.)")
+        exit(1)
+    }
+    emit("PERMISO: concedido.")
 }
 
 let cap = Capture(outDir: outDir, chunkSeconds: chunkSeconds)

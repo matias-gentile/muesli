@@ -29,15 +29,22 @@ cd native
 Queda el binario `native/muesli-capture`.
 
 ## Permiso (una sola vez)
-ScreenCaptureKit necesita permiso de **Grabación de pantalla**. Como lo vas a correr
-desde la Terminal, hay que dárselo **a la Terminal**:
+ScreenCaptureKit necesita permiso de **Grabación de pantalla**. Dos trampas típicas:
 
+- **Va a la app EXACTA desde la que lanzás el binario**, no a un "Terminal" genérico:
+  Terminal.app → activá *Terminal*; iTerm → *iTerm*; terminal de **VS Code** → *Code*.
+- **No alcanza con tildar el toggle**: cerrá esa app por completo con **Cmd+Q** (no solo
+  la ventana) y reabrila. Recién ahí toma efecto.
+
+Pasos:
 1. Ajustes del Sistema → **Privacidad y seguridad** → **Grabación de pantalla**.
-2. Agregá / activá **Terminal** (o iTerm, lo que uses).
-3. **Cerrá y reabrí la Terminal** (el permiso toma efecto al reiniciarla).
+2. Activá (o agregá con **+**) la app que estés usando.
+3. **Cmd+Q** en esa app y reabrila.
+4. Reintentá. (Si la primera vez tocaste "Deny", el permiso queda bloqueado y no vuelve a
+   preguntar: hay que activarlo a mano acá.)
 
-(Cuando más adelante esto viva dentro del `.app`, el permiso se lo va a pedir la app,
-no la Terminal.)
+(Cuando más adelante esto viva dentro del `.app`, el permiso se lo va a pedir la app, no
+la Terminal.)
 
 ## Probar
 ```bash
