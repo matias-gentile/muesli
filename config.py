@@ -10,6 +10,7 @@ config.update({...}) para guardar desde el panel.
 """
 import json
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,10 +18,19 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).parent
 load_dotenv()
 
-RECORDINGS_DIR = BASE_DIR / "recordings"
-NOTES_DIR = BASE_DIR / "notes"
-DB_PATH = BASE_DIR / "notes.db"
-SETTINGS_PATH = BASE_DIR / "settings.json"
+# Datos del usuario (grabaciones, notas, settings). En desarrollo viven en la carpeta del
+# proyecto; cuando la app está empaquetada (.app) van a una carpeta ESCRIBIBLE del usuario
+# (dentro del bundle sería de solo lectura y se perdería al actualizar).
+if getattr(sys, "frozen", False):
+    DATA_DIR = Path.home() / "Library" / "Application Support" / "Muesli"
+else:
+    DATA_DIR = BASE_DIR
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+RECORDINGS_DIR = DATA_DIR / "recordings"
+NOTES_DIR = DATA_DIR / "notes"
+DB_PATH = DATA_DIR / "notes.db"
+SETTINGS_PATH = DATA_DIR / "settings.json"
 
 RECORDINGS_DIR.mkdir(exist_ok=True)
 NOTES_DIR.mkdir(exist_ok=True)
@@ -35,7 +45,10 @@ _DEFAULTS = {
     "AUDIO_DEVICE_OUTPUT_ONLY": os.getenv("AUDIO_DEVICE_OUTPUT_ONLY", "BlackHole"),
     # Backend de captura: "blackhole" (sounddevice + driver virtual, sistema+mic) o
     # "screencapturekit" (helper nativo, audio del sistema sin configurar Audio MIDI).
-    "CAPTURE_BACKEND": os.getenv("CAPTURE_BACKEND", "blackhole"),
+    # En la app empaquetada arrancamos en SCK (no incluye BlackHole/PortAudio).
+    "CAPTURE_BACKEND": os.getenv(
+        "CAPTURE_BACKEND",
+        "screencapturekit" if getattr(sys, "frozen", False) else "blackhole"),
     "CHUNK_SECONDS": os.getenv("CHUNK_SECONDS", "600"),
     "AUTO_STOP_SILENCE_MIN": os.getenv("AUTO_STOP_SILENCE_MIN", "15"),
     "MAX_RECORDING_MIN": os.getenv("MAX_RECORDING_MIN", "180"),

@@ -8,11 +8,16 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sys
 import threading
 import time
 from pathlib import Path
 
-import sounddevice as sd
+# sounddevice solo lo necesita el backend BlackHole; opcional para builds solo-SCK.
+try:
+    import sounddevice as sd
+except Exception:  # pragma: no cover
+    sd = None
 from flask import Flask, Response, jsonify, render_template, request, send_from_directory
 
 import config
@@ -25,7 +30,14 @@ from screen_capture import ScreenCaptureRecorder
 from session import Session
 from summarize import list_templates, summarize, type_label
 
-app = Flask(__name__)
+
+def _resource(rel: str) -> str:
+    """Ruta a un recurso empaquetado (templates/assets). En el .app está bajo _MEIPASS."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, rel)
+
+
+app = Flask(__name__, template_folder=_resource("templates"))
 recorder: ChunkedRecorder | None = None
 session: Session | None = None
 auto_stop_reason: str | None = None  # motivo si la última grabación se detuvo sola
@@ -70,16 +82,18 @@ def index():
 
 @app.route("/favicon.png")
 def favicon_png():
-    return send_from_directory(str(config.BASE_DIR / "assets"), "favicon.png")
+    return send_from_directory(_resource("assets"), "favicon.png")
 
 
 @app.route("/favicon.ico")
 def favicon_ico():
-    return send_from_directory(str(config.BASE_DIR / "assets"), "favicon.png")
+    return send_from_directory(_resource("assets"), "favicon.png")
 
 
 @app.route("/api/devices")
 def devices():
+    if sd is None:
+        return jsonify({"configured": config.get("AUDIO_DEVICE_NAME"), "devices": []})
     out = [{"index": i, "name": d["name"], "channels": d["max_input_channels"]}
            for i, d in enumerate(sd.query_devices()) if d["max_input_channels"] > 0]
     return jsonify({"configured": config.get("AUDIO_DEVICE_NAME"), "devices": out})
@@ -238,7 +252,7 @@ def resume():
 
 @app.route("/api/health")
 def health():
-    names = [d["name"].lower() for d in sd.query_devices()]
+    names = [d["name"].lower() for d in sd.query_devices()] if sd is not None else []
     dev_name = config.get("AUDIO_DEVICE_NAME")
     return jsonify({
         "blackhole": any("blackhole" in n for n in names),

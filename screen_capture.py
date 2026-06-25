@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -35,7 +36,12 @@ from audio_mix import mix_wavs
 # Mismo umbral que audio_capture.py: por debajo se considera "silencio" (auto-stop).
 SILENCE_LEVEL = 0.04
 
-DEFAULT_HELPER = BASE_DIR / "native" / "muesli-capture"
+# Ubicación del helper nativo: dentro del .app cuando está empaquetado, o en native/ en dev.
+if getattr(sys, "frozen", False):
+    _HELPER_BASE = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    DEFAULT_HELPER = Path(_HELPER_BASE) / "muesli-capture"
+else:
+    DEFAULT_HELPER = BASE_DIR / "native" / "muesli-capture"
 
 _LEVEL_RE = re.compile(r"^LEVEL\s+([0-9.]+)")
 _CHUNK_RE = re.compile(r"^CHUNK\s+(\S+)")

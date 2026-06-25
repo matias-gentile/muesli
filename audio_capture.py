@@ -13,17 +13,30 @@ import threading
 from pathlib import Path
 
 import numpy as np
-import sounddevice as sd
-import soundfile as sf
+
+# sounddevice/soundfile son nativos (PortAudio/libsndfile) y solo los necesita el
+# backend BlackHole. Los hacemos OPCIONALES para que una build empaquetada solo-SCK
+# no tenga que incluirlos: si no están, BlackHole no está disponible pero SCK sí.
+try:
+    import sounddevice as sd
+    import soundfile as sf
+except Exception:  # pragma: no cover - depende del entorno/empaquetado
+    sd = None
+    sf = None
 
 from config import RECORDINGS_DIR, AUDIO_DEVICE_NAME, CHUNK_SECONDS
 
 # Por debajo de este nivel (0..1) consideramos un bloque como "silencio" para el auto-stop.
 SILENCE_LEVEL = 0.04
 
+_NO_AUDIO_LIB = ("El backend BlackHole no está disponible en esta versión "
+                 "(falta sounddevice/soundfile). Usá ScreenCaptureKit en Configuración.")
+
 
 def find_input_device(name: str):
     """Devuelve el índice del primer dispositivo de entrada que contenga `name`, o None."""
+    if sd is None:
+        return None
     for i, d in enumerate(sd.query_devices()):
         if name.lower() in d["name"].lower() and d["max_input_channels"] > 0:
             return i
@@ -32,6 +45,8 @@ def find_input_device(name: str):
 
 def record_test(device_name: str, seconds: float = 3.0) -> dict:
     """Graba unos segundos y devuelve el nivel pico, para verificar el ruteo de audio."""
+    if sd is None:
+        return {"ok": False, "error": _NO_AUDIO_LIB}
     idx = find_input_device(device_name)
     if idx is None:
         return {"ok": False,
@@ -48,6 +63,8 @@ def record_test(device_name: str, seconds: float = 3.0) -> dict:
 class ChunkedRecorder:
     def __init__(self, device_name: str = AUDIO_DEVICE_NAME, on_chunk=None,
                  chunk_seconds: int = CHUNK_SECONDS, out_dir: Path = RECORDINGS_DIR):
+        if sd is None or sf is None:
+            raise RuntimeError(_NO_AUDIO_LIB)
         self.device_index = self._find_device(device_name)
         info = sd.query_devices(self.device_index)
         self.samplerate = int(info["default_samplerate"])

@@ -213,8 +213,31 @@ reunión, usá el panel.
 
 ## Abrir Muesli con doble clic (ejecutable en el Escritorio)
 
-Si no querés arrancarlo desde la Terminal ni VS Code, podés generar un **`Muesli.app`**
-en el Escritorio y abrirlo con doble clic. Abre la app en **modo barra de menú** (ícono
+Hay **dos formas** de tener un `Muesli.app`:
+
+### A) App standalone (recomendada) — `build_standalone.command`
+Un `.app` **autocontenido**: trae Python, todas las dependencias y el helper de captura
+adentro. Funciona con **doble clic, sin venv ni `python menubar.py`**, y usa
+**ScreenCaptureKit por defecto** (audio del sistema + micrófono, **sin BlackHole ni Audio
+MIDI**). Es la versión "producto".
+
+```bash
+./build_standalone.command
+```
+Esto compila el helper, empaqueta con **PyInstaller** y deja `Muesli.app` en tu Escritorio.
+Requisitos: macOS 13+, herramientas de Xcode (`xcode-select --install`) y tu venv con las
+dependencias instaladas. Notas:
+- **Primera vez:** abrilo con **botón derecho → Abrir** (Gatekeeper, porque no está
+  notarizada). Concedé **Grabación de pantalla** y **Micrófono** (Ajustes → Privacidad).
+- La **primera transcripción** baja el modelo de Whisper (necesita internet una vez).
+- Tus datos (notas, grabaciones, settings) se guardan en
+  `~/Library/Application Support/Muesli` (no dentro del `.app`).
+- Empaquetar con PyInstaller puede pedir un par de ajustes la primera vez; si falla, mirá
+  los errores que imprime.
+
+### B) Lanzador liviano — `build_app.command`
+Genera un `.app` chico que **abre tu instalación actual** (necesita la carpeta del proyecto
+y el venv donde están). Útil para desarrollo. Abre la app en **modo barra de menú** (ícono
 🎙️ arriba, sin Terminal ni navegador).
 
 **Una sola vez**, doble clic en **`build_app.command`** (está en la carpeta del proyecto).

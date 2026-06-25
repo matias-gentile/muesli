@@ -23,3 +23,8 @@ settings.json
 native/muesli-capture
 native/*.o
 native/*.dSYM
+
+# Salidas de PyInstaller
+build/
+dist/
+*.app

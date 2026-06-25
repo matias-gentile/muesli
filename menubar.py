@@ -206,8 +206,13 @@ class MuesliBar(rumps.App):
         self.title = "🎙️"
         self.status_item.title = "Grabación cancelada"
 
-    # ---- panel (ventana nativa, sin navegador) ----
+    # ---- panel ----
     def open_panel(self, _):
+        # En la app empaquetada no podemos lanzar "python panel.py": abrimos el navegador.
+        if getattr(sys, "frozen", False):
+            import webbrowser
+            webbrowser.open("http://127.0.0.1:5001")
+            return
         if self._panel_proc is not None and self._panel_proc.poll() is None:
             return  # ya está abierto
         self._panel_proc = subprocess.Popen([sys.executable, os.path.join(HERE, "panel.py")])
