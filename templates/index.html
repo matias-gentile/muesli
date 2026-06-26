@@ -200,7 +200,7 @@
   .test-result{font-size:13px; font-weight:600; min-height:18px;}
   .storage-info{font-size:13px; color:var(--text-dim); line-height:1.5;}
   .edit-btn.danger{color:var(--rec); border-color:var(--rec);}
-  .edit-btn.danger:hover{background:rgba(193,58,42,.08);}
+  .edit-btn.danger:hover{background:color-mix(in srgb, var(--rec) 10%, transparent);}
   .pause-btn{
     flex-shrink:0; padding:5px 11px; border-radius:8px; cursor:pointer;
     border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim);
@@ -455,7 +455,7 @@
   code{background:var(--surface-3); padding:2px 6px; border-radius:5px; font-size:13px;}
 
   :focus-visible{outline:2px solid var(--accent-text); outline-offset:2px;}
-  ::selection{background:rgba(240,169,58,.3);}
+  ::selection{background:color-mix(in srgb, var(--accent) 32%, transparent);}
   *::-webkit-scrollbar{width:11px; height:11px;}
   *::-webkit-scrollbar-track{background:transparent;}
   *::-webkit-scrollbar-thumb{background:var(--border); border-radius:7px; border:3px solid transparent; background-clip:padding-box;}
@@ -663,6 +663,7 @@ let recording = false;
 let t0 = null, timerId = null;
 let activeId = null;
 let audioMode = "full";  // "full" = salida + micrófono, "output" = solo salida
+let captureBackend = "blackhole";  // backend activo (lo setea /api/start); cambia los hints
 let levelTimer = null, lastPartialLen = -1;
 let curSummary = "";  // resumen crudo de la nota abierta (para editar)
 let allNotes = [], templateLabels = {};  // cache de la lista + value->label de tipos
@@ -772,8 +773,9 @@ async function start() {
   const data = await r.json();
   if (data.error) { setStatus("⚠️ " + data.error); return; }
   // ScreenCaptureKit no soporta pausa todavía: ocultá el botón en ese modo.
+  captureBackend = data.backend || "blackhole";
   const pb = document.getElementById("pauseBtn");
-  if (pb) pb.style.display = (data.backend === "screencapturekit") ? "none" : "";
+  if (pb) pb.style.display = (captureBackend === "screencapturekit") ? "none" : "";
   // Asegurá la vista de compositor (con el panel en vivo y el botón Detener).
   document.getElementById("result").innerHTML = "";
   activeId = null;
@@ -791,7 +793,11 @@ async function start() {
   document.getElementById("recLabel").innerHTML =
     '<span class="pulse"></span> Detener y resumir';
   const modeLabel = audioMode === "output" ? "solo salida" : "salida + micrófono";
-  setStatus(`Grabando (${modeLabel})… mantené la salida del sistema en el Multi-Output Device.`);
+  if (captureBackend === "screencapturekit") {
+    setStatus(`Grabando (${modeLabel})… dejá la reunión sonando; se captura el audio del sistema directo.`);
+  } else {
+    setStatus(`Grabando (${modeLabel})… mantené la salida del sistema en el Multi-Output Device.`);
+  }
 }
 
 async function stop() {
@@ -1331,7 +1337,10 @@ async function loadHealth() {
   let h;
   try { h = await (await fetch("/api/health")).json(); } catch (e) { return; }
   const banner = document.getElementById("setupBanner");
-  const critical = !h.api_key || !h.device.ok || !h.blackhole;
+  // En SCK no hace falta BlackHole ni dispositivo agregado: lo único imprescindible es la API key.
+  const critical = (h.backend === "screencapturekit")
+    ? !h.api_key
+    : (!h.api_key || !h.device.ok || !h.blackhole);
   if (bannerDismissed || (!critical && h.has_notes)) {
     banner.style.display = "none";
   } else {
