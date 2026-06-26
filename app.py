@@ -59,7 +59,7 @@ def _finish_recording(title="", notes="", ctype="reunion", context="", auto_reas
 def _auto_stop_monitor(rec):
     """Corre en segundo plano mientras se graba: corta sola si hay demasiado silencio
     seguido, o si se pasa del límite máximo de duración."""
-    silence_limit = config.get_int("AUTO_STOP_SILENCE_MIN", 0) * 60
+    silence_limit = config.get_float("AUTO_STOP_SILENCE_MIN", 0) * 60
     max_limit = config.get_int("MAX_RECORDING_MIN", 0) * 60
     started = time.time()
     while True:
@@ -169,7 +169,7 @@ def start():
         return jsonify({"error": str(e)}), 400
 
     # Monitor de auto-stop (silencio / duración máxima), si alguno está activo.
-    if config.get_int("AUTO_STOP_SILENCE_MIN", 0) > 0 or config.get_int("MAX_RECORDING_MIN", 0) > 0:
+    if config.get_float("AUTO_STOP_SILENCE_MIN", 0) > 0 or config.get_int("MAX_RECORDING_MIN", 0) > 0:
         threading.Thread(target=_auto_stop_monitor, args=(recorder,), daemon=True).start()
     return jsonify({"status": "recording", "mode": mode, "backend": backend})
 
@@ -355,8 +355,9 @@ def followup_note(note_id):
     n, err = _note_or_404(note_id)
     if err:
         return err
+    style = (request.get_json(silent=True) or {}).get("style", "cordial")
     try:
-        text = assistant.followup_email(n)
+        text = assistant.followup_email(n, style=style)
     except Exception as e:
         return jsonify({"error": f"No pude redactar el email: {e}"}), 502
     return jsonify({"text": text})

@@ -473,6 +473,9 @@
   /* Asistente sobre la nota: chat + tarjetas de email/pendientes */
   .ai-section{margin-top:22px; border-top:1px solid var(--border-soft); padding-top:18px;}
   .ai-tools{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;}
+  .ai-followup{display:inline-flex; align-items:center; gap:6px;}
+  .ai-style-select{font-family:inherit; font-size:13px; padding:7px 9px; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer;}
+  .ai-style-select:hover{border-color:var(--accent);}
   .ai-card{
     background:var(--surface-2); border:1px solid var(--border); border-radius:14px;
     padding:15px 17px; margin-bottom:14px;
@@ -660,30 +663,6 @@
       </div>
       <div class="modal-body">
         <div id="settingsHealth"></div>
-        <label class="fld">
-          <span>Fuente de captura</span>
-          <select id="setBackend" onchange="updateBackendHint()">
-            <option value="blackhole">BlackHole — sistema + micrófono (requiere Audio MIDI)</option>
-            <option value="screencapturekit">ScreenCaptureKit — audio del sistema (sin configurar nada)</option>
-          </select>
-        </label>
-        <div class="test-hint" id="backendHint"></div>
-        <div id="blackholeOnly">
-        <label class="fld">
-          <span>Dispositivo de audio — Salida + micrófono</span>
-          <select id="setDevFull"></select>
-        </label>
-        <label class="fld">
-          <span>Dispositivo de audio — Solo salida del sistema</span>
-          <select id="setDevOut"></select>
-        </label>
-        <div class="test-row">
-          <button class="edit-btn" onclick="testAudio('full')">▶ Probar salida+mic</button>
-          <button class="edit-btn" onclick="testAudio('output')">▶ Probar solo salida</button>
-        </div>
-        <div class="test-hint">Para "solo salida", poné algo a sonar durante la prueba (3 s).</div>
-        <div id="testResult" class="test-result"></div>
-        </div>
 
         <div class="fld-sep">Claude (Anthropic)</div>
         <label class="fld">
@@ -693,8 +672,15 @@
         <div class="test-hint">Tu clave <code>sk-ant-…</code> de <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Hace falta para generar los resúmenes. Se guarda local en tu Mac.</div>
         <label class="fld">
           <span>Modelo de Claude (resúmenes)</span>
-          <input id="setClaude" type="text" placeholder="claude-sonnet-4-6" />
+          <select id="setClaude" onchange="onModelChange()">
+            <option value="claude-haiku-4-5">Haiku 4.5 — el más barato y rápido · $1/$5 por millón</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 — equilibrado (recomendado) · $3/$15</option>
+            <option value="claude-opus-4-8">Opus 4.8 — el más potente y caro · $5/$25</option>
+            <option value="__custom__">Personalizado…</option>
+          </select>
         </label>
+        <input id="setClaudeCustom" type="text" placeholder="claude-… (ID exacto del modelo)" style="display:none" />
+        <div class="test-hint">Precios por millón de tokens (entrada/salida), aprox. junio 2026. Más barato = más rápido; más caro = más capaz. Para resúmenes de reuniones, Sonnet suele ser el mejor equilibrio.</div>
         <label class="fld">
           <span>Modelo de Whisper (transcripción)</span>
           <select id="setWhisper">
@@ -713,6 +699,9 @@
           <span>Auto-detener tras silencio</span>
           <select id="setAutoStop">
             <option value="0">Desactivado</option>
+            <option value="0.5">30 segundos sin audio</option>
+            <option value="1">1 min sin audio</option>
+            <option value="2">2 min sin audio</option>
             <option value="5">5 min sin audio</option>
             <option value="10">10 min sin audio</option>
             <option value="15">15 min sin audio</option>
@@ -1107,7 +1096,15 @@ function render(o) {
   const aiSection = noteId ? `
     <div class="ai-section">
       <div class="ai-tools">
-        <button class="edit-btn" onclick="genFollowup(${noteId})">✉ Email de seguimiento</button>
+        <span class="ai-followup">
+          <select id="followupStyle" class="ai-style-select" title="Estilo del seguimiento">
+            <option value="cordial">Email cordial</option>
+            <option value="formal">Email formal</option>
+            <option value="slack">Mensaje de Slack</option>
+            <option value="breve">Mensaje breve</option>
+          </select>
+          <button class="edit-btn" onclick="genFollowup(${noteId})">✉ Generar seguimiento</button>
+        </span>
         <button class="edit-btn" onclick="genActionItems(${noteId})">✓ Pendientes</button>
         <button class="edit-btn" onclick="genDialogue(${noteId})">💬 Diálogo</button>
       </div>
@@ -1356,11 +1353,14 @@ async function askNote(id) {
   }
 }
 
-async function genAI(id, endpoint, title, copyMsg) {
+async function genAI(id, endpoint, title, copyMsg, body) {
   const out = document.getElementById("aiOutput");
   out.innerHTML = `<div class="ai-card"><div class="ai-card-head"><span class="ai-card-title">${title}</span></div><div class="ai-thinking">Generando…</div></div>`;
   try {
-    const r = await fetch(`/api/notes/${id}/${endpoint}`, { method: "POST" });
+    const opts = body
+      ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+      : { method: "POST" };
+    const r = await fetch(`/api/notes/${id}/${endpoint}`, opts);
     const d = await r.json();
     if (!r.ok || d.error) {
       out.innerHTML = `<div class="ai-card"><div class="ai-warn">⚠ ${escHtml(d.error || "falló la generación")}</div></div>`;
@@ -1379,7 +1379,12 @@ async function genAI(id, endpoint, title, copyMsg) {
   }
 }
 
-function genFollowup(id) { genAI(id, "followup", "Email de seguimiento", "✓ Email copiado."); }
+function genFollowup(id) {
+  const sel = document.getElementById("followupStyle");
+  const style = sel ? sel.value : "cordial";
+  const titles = { cordial: "Email de seguimiento", formal: "Email formal", slack: "Mensaje de Slack", breve: "Mensaje breve" };
+  genAI(id, "followup", titles[style] || "Email de seguimiento", "✓ Copiado.", { style });
+}
 function genActionItems(id) { genAI(id, "action-items", "Pendientes", "✓ Pendientes copiados."); }
 
 async function genDialogue(id) {
@@ -1589,38 +1594,24 @@ async function recoverFolder(folder, label) {
   }
 }
 
-function updateBackendHint() {
-  const v = document.getElementById("setBackend").value;
-  const el = document.getElementById("backendHint");
-  const bh = document.getElementById("blackholeOnly");
-  if (v === "screencapturekit") {
-    // Los dispositivos y los "Probar" son solo para BlackHole: los ocultamos.
-    if (bh) bh.style.display = "none";
-    el.innerHTML = "Graba el audio del sistema con ScreenCaptureKit — <b>sin BlackHole ni Audio MIDI</b>. " +
-      "Pide permiso de <b>Grabación de pantalla</b> (y de <b>Micrófono</b> si usás \"Salida + micrófono\", en macOS 15+). " +
-      "El toggle de arriba del grabador elige si suma tu micrófono. No permite pausar todavía. " +
-      "Requiere compilar el helper: <code>cd native && ./build.sh</code>.";
-  } else {
-    if (bh) bh.style.display = "";
-    el.textContent = "Graba sistema + micrófono vía BlackHole. Necesita el dispositivo agregado y los Multi-Output en Audio MIDI.";
-  }
-}
-
 async function openSettings() {
   document.getElementById("settingsOverlay").style.display = "flex";
-  document.getElementById("testResult").textContent = "";
-  try { deviceList = (await (await fetch("/api/devices")).json()).devices || []; }
-  catch (e) { deviceList = []; }
   let s = {};
   try { s = await (await fetch("/api/settings")).json(); } catch (e) {}
-  fillDeviceSelect("setDevFull", s.AUDIO_DEVICE_NAME);
-  fillDeviceSelect("setDevOut", s.AUDIO_DEVICE_OUTPUT_ONLY);
-  document.getElementById("setBackend").value = s.CAPTURE_BACKEND || "blackhole";
-  updateBackendHint();
   document.getElementById("setKey").value = "";
   document.getElementById("setKey").placeholder =
     s.ANTHROPIC_API_KEY_set ? "•••••• configurada — vacío = no cambiar" : "pegá tu sk-ant-… acá";
-  document.getElementById("setClaude").value = s.CLAUDE_MODEL || "";
+  // Modelo: si coincide con una opción conocida la seleccionamos; si no, "Personalizado".
+  const model = s.CLAUDE_MODEL || "claude-sonnet-4-6";
+  const known = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"];
+  if (known.includes(model)) {
+    document.getElementById("setClaude").value = model;
+    document.getElementById("setClaudeCustom").value = "";
+  } else {
+    document.getElementById("setClaude").value = "__custom__";
+    document.getElementById("setClaudeCustom").value = model;
+  }
+  onModelChange();
   document.getElementById("setWhisper").value = s.WHISPER_MODEL || "base";
   document.getElementById("setChunk").value = s.CHUNK_SECONDS || "600";
   document.getElementById("setAutoStop").value = s.AUTO_STOP_SILENCE_MIN || "0";
@@ -1634,25 +1625,22 @@ async function openSettings() {
   loadStorage();
 }
 
-function fillDeviceSelect(id, current) {
-  const sel = document.getElementById(id);
-  const names = deviceList.map(d => d.name);
-  const opts = names.slice();
-  if (current && !names.includes(current)) opts.unshift(current);
-  sel.innerHTML = opts.map(n =>
-    `<option value="${escAttr(n)}" ${n === current ? "selected" : ""}>${(n || "").replace(/</g, "&lt;")}</option>`).join("");
+function onModelChange() {
+  const custom = document.getElementById("setClaudeCustom");
+  custom.style.display = (document.getElementById("setClaude").value === "__custom__") ? "" : "none";
 }
 
 function closeSettings() { document.getElementById("settingsOverlay").style.display = "none"; }
 
 async function saveSettings() {
+  const modelSel = document.getElementById("setClaude").value;
+  const modelVal = (modelSel === "__custom__")
+    ? document.getElementById("setClaudeCustom").value.trim()
+    : modelSel;
   const body = {
-    AUDIO_DEVICE_NAME: document.getElementById("setDevFull").value,
-    AUDIO_DEVICE_OUTPUT_ONLY: document.getElementById("setDevOut").value,
-    CLAUDE_MODEL: document.getElementById("setClaude").value.trim(),
+    CLAUDE_MODEL: modelVal,
     WHISPER_MODEL: document.getElementById("setWhisper").value,
     CHUNK_SECONDS: document.getElementById("setChunk").value,
-    CAPTURE_BACKEND: document.getElementById("setBackend").value,
     AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
     MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,
     AUTO_PURGE_AUDIO: document.getElementById("setAutoPurge").value,
@@ -1671,28 +1659,6 @@ async function saveSettings() {
     setStatus("✓ Configuración guardada.");
     loadHealth();
   } catch (e) { setStatus("⚠️ No se pudo guardar la configuración."); }
-}
-
-async function testAudio(mode) {
-  const el = document.getElementById("testResult");
-  el.style.color = "var(--text-dim)";
-  el.textContent = "Grabando 3 s…";
-  try {
-    const r = await fetch("/api/test-audio", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode }),
-    });
-    const d = await r.json();
-    if (!d.ok) { el.style.color = "var(--rec)"; el.textContent = "⚠ " + (d.error || "falló la prueba"); return; }
-    const pct = Math.round(d.peak * 100);
-    if (d.peak > 0.02) {
-      el.style.color = "var(--ok)";
-      el.textContent = `✓ Señal OK (pico ${pct}%) · ${d.device}`;
-    } else {
-      el.style.color = "var(--rec)";
-      el.textContent = `⚠ Casi sin señal (pico ${pct}%). Revisá el ruteo: la salida del sistema debe ir a un Multi-Output con BlackHole.`;
-    }
-  } catch (e) { el.style.color = "var(--rec)"; el.textContent = "⚠ Error al probar el audio."; }
 }
 
 async function loadHealth() {
@@ -1813,7 +1779,7 @@ updateThemeBtn();
 const TUTORIAL = [
   { icon: "🥣", title: "Bienvenido a Muesli", body: "Muesli graba tus reuniones, las <b>transcribe en tu Mac</b> y arma un resumen con IA. Todo local y privado. Te muestro lo básico en un minuto." },
   { icon: "🔑", title: "1 · Cargá tu API key de Claude", body: "En <b>⚙ Configuración → API key de Claude</b> pegá tu clave <code>sk-ant-…</code> (de console.anthropic.com). Es lo único imprescindible: sin ella no hay resúmenes." },
-  { icon: "🎧", title: "2 · Elegí qué grabar", body: "En Configuración, <b>Fuente de captura → ScreenCaptureKit</b> graba el audio del sistema <b>sin instalar nada</b>. El modo <b>Salida + micrófono</b> suma tu voz. macOS te pedirá permiso de Grabación de pantalla y Micrófono la primera vez." },
+  { icon: "🎧", title: "2 · Permisos de macOS", body: "Muesli graba el audio del sistema <b>sin instalar nada</b>. El toggle <b>Salida + micrófono</b> del grabador suma tu voz. La primera vez, macOS te va a pedir permiso de <b>Grabación de pantalla</b> y de <b>Micrófono</b>: aceptá y listo." },
   { icon: "⏺️", title: "3 · Grabá tu reunión", body: "Tocá <b>● Grabar</b>, elegí el tipo (reunión, clase, entrevista…) y, si querés, anotá ideas sueltas en <b>Mis notas</b> mientras hablan. Al terminar, <b>Detener</b>: Muesli transcribe y resume solo." },
   { icon: "✨", title: "4 · Exprimí cada nota", body: "En una nota podés <b>preguntarle</b> a la reunión, generar un <b>email de seguimiento</b> y <b>pendientes</b>, <b>realzar tus notas</b>, ver el <b>diálogo</b> y los <b>momentos clave</b> con salto al audio." },
   { icon: "🔒", title: "5 · Privado por diseño", body: "La transcripción corre en tu Mac y el audio queda local. Si querés, activá el <b>auto-borrado del audio</b> en Configuración para que se borre apenas se transcribe." },

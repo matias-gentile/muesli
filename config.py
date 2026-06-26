@@ -45,10 +45,8 @@ _DEFAULTS = {
     "AUDIO_DEVICE_OUTPUT_ONLY": os.getenv("AUDIO_DEVICE_OUTPUT_ONLY", "BlackHole"),
     # Backend de captura: "blackhole" (sounddevice + driver virtual, sistema+mic) o
     # "screencapturekit" (helper nativo, audio del sistema sin configurar Audio MIDI).
-    # En la app empaquetada arrancamos en SCK (no incluye BlackHole/PortAudio).
-    "CAPTURE_BACKEND": os.getenv(
-        "CAPTURE_BACKEND",
-        "screencapturekit" if getattr(sys, "frozen", False) else "blackhole"),
+    # Es el único backend que expone la app (BlackHole queda solo para power users vía .env).
+    "CAPTURE_BACKEND": os.getenv("CAPTURE_BACKEND", "screencapturekit"),
     "CHUNK_SECONDS": os.getenv("CHUNK_SECONDS", "600"),
     "AUTO_STOP_SILENCE_MIN": os.getenv("AUTO_STOP_SILENCE_MIN", "15"),
     "MAX_RECORDING_MIN": os.getenv("MAX_RECORDING_MIN", "180"),
@@ -84,6 +82,13 @@ def get_bool(key):
 def get_int(key, default=0):
     try:
         return int(get(key))
+    except (TypeError, ValueError):
+        return default
+
+
+def get_float(key, default=0.0):
+    try:
+        return float(get(key))
     except (TypeError, ValueError):
         return default
 

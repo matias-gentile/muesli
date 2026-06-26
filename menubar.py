@@ -96,6 +96,31 @@ def _panel_ui_delegate_class():
     return _PanelUIDelegate
 
 
+_PANEL_WIN_DELEGATE_CLASS = None
+
+
+def _panel_window_delegate_class():
+    """Delegate del panel: al cerrarlo, volvemos a 'accessory' (sin ícono en el Dock).
+
+    Mientras el panel está abierto la app corre como 'regular' para aparecer en Cmd+Tab.
+    """
+    global _PANEL_WIN_DELEGATE_CLASS
+    if _PANEL_WIN_DELEGATE_CLASS is not None:
+        return _PANEL_WIN_DELEGATE_CLASS
+    from Foundation import NSObject
+    from AppKit import NSApp, NSApplicationActivationPolicyAccessory
+
+    class _PanelWindowDelegate(NSObject):
+        def windowWillClose_(self, notification):
+            try:
+                NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+            except Exception:
+                pass
+
+    _PANEL_WIN_DELEGATE_CLASS = _PanelWindowDelegate
+    return _PanelWindowDelegate
+
+
 # ---- helpers HTTP a la API local ----------------------------------------
 def api_get(path):
     with urllib.request.urlopen(BASE + path, timeout=3) as r:
@@ -285,7 +310,8 @@ class MuesliBar(rumps.App):
         # Si ya está abierta, traela al frente.
         if getattr(self, "_panel_window", None) is not None:
             try:
-                from AppKit import NSApp
+                from AppKit import NSApp, NSApplicationActivationPolicyRegular
+                NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)  # aparece en Cmd+Tab
                 self._panel_window.makeKeyAndOrderFront_(None)
                 NSApp.activateIgnoringOtherApps_(True)
                 return
@@ -293,6 +319,7 @@ class MuesliBar(rumps.App):
                 self._panel_window = None
         try:
             from AppKit import (NSWindow, NSBackingStoreBuffered, NSApp,
+                                NSApplicationActivationPolicyRegular,
                                 NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
                                 NSWindowStyleMaskResizable, NSWindowStyleMaskMiniaturizable)
             from WebKit import WKWebView, WKWebViewConfiguration
@@ -305,6 +332,12 @@ class MuesliBar(rumps.App):
                 rect, style, NSBackingStoreBuffered, False)
             win.setTitle_("Muesli")
             win.setReleasedWhenClosed_(False)
+            # Al cerrar el panel volvemos a 'accessory' (sin Dock); ver delegate.
+            try:
+                self._panel_win_delegate = _panel_window_delegate_class().alloc().init()
+                win.setDelegate_(self._panel_win_delegate)
+            except Exception:
+                pass
             web = WKWebView.alloc().initWithFrame_configuration_(
                 rect, WKWebViewConfiguration.alloc().init())
             # Diálogos JS (confirm/alert) y links target="_blank" del panel.
@@ -317,6 +350,11 @@ class MuesliBar(rumps.App):
             web.loadRequest_(NSURLRequest.requestWithURL_(
                 NSURL.URLWithString_("http://127.0.0.1:5001")))
             win.center()
+            # 'regular' mientras el panel está abierto → la app aparece en Cmd+Tab y en el Dock.
+            try:
+                NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+            except Exception:
+                pass
             win.makeKeyAndOrderFront_(None)
             NSApp.activateIgnoringOtherApps_(True)
             self._panel_window = win

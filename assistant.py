@@ -81,14 +81,37 @@ def ask(note: dict, question: str, history: list | None = None) -> str:
     return _complete(system, messages, max_tokens=1200)
 
 
-def followup_email(note: dict) -> str:
-    """Redacta un email de seguimiento listo para enviar."""
+_FOLLOWUP_STYLES = {
+    "cordial": (
+        "Es un EMAIL de seguimiento con tono profesional pero cordial. Estructura: saludo, una o "
+        "dos frases de contexto, los puntos y decisiones clave en viñetas, los próximos pasos con "
+        "responsables y fechas si se mencionan, y un cierre breve. La PRIMERA línea debe ser "
+        "'Asunto: ...' y después el cuerpo."
+    ),
+    "formal": (
+        "Es un EMAIL de seguimiento FORMAL (registro corporativo, trato de usted). Estructura: "
+        "saludo formal, breve contexto, resumen de acuerdos y decisiones en viñetas, próximos pasos "
+        "con responsables y fechas, y un cierre cortés. La PRIMERA línea debe ser 'Asunto: ...' y "
+        "después el cuerpo. Sin emojis ni muletillas."
+    ),
+    "slack": (
+        "Es un MENSAJE DE SLACK/CHAT para el equipo: informal y directo. SIN 'Asunto:' y sin saludo "
+        "de email. Arrancá con un resumen de una línea y seguí con los puntos clave y los próximos "
+        "pasos en viñetas cortas. Podés usar algún emoji puntual. Pensado para leerse en el celular."
+    ),
+    "breve": (
+        "Es un MENSAJE BREVE (estilo WhatsApp/Slack), lo más corto posible: 3 a 5 líneas con lo "
+        "esencial y los próximos pasos. SIN 'Asunto:' y sin formalidades."
+    ),
+}
+
+
+def followup_email(note: dict, style: str = "cordial") -> str:
+    """Redacta un seguimiento de la reunión en el estilo pedido (email cordial/formal, Slack o breve)."""
+    rules = _FOLLOWUP_STYLES.get(style, _FOLLOWUP_STYLES["cordial"])
     system = (
-        "Redactá un email de seguimiento (follow-up) de la reunión, en español, listo para enviar. "
-        "Tono profesional y cordial. Estructura: saludo, una o dos frases de contexto, los puntos y "
-        "decisiones clave en viñetas, los próximos pasos con responsables y fechas si se mencionan, "
-        "y un cierre breve. La PRIMERA línea debe ser 'Asunto: ...' y luego el cuerpo. Devolvé SOLO "
-        "el email, sin comentarios tuyos. No inventes datos que no estén en el material."
+        "Redactá un seguimiento de la reunión, en español, listo para enviar. " + rules +
+        " Devolvé SOLO el texto, sin comentarios tuyos. No inventes datos que no estén en el material."
     )
     return _complete(system, [{"role": "user", "content": _note_context(note)}], max_tokens=1200)
 
