@@ -29,6 +29,15 @@ BASE = "http://127.0.0.1:5001"
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _resource(rel: str) -> str:
+    """Ruta a un recurso (assets) — dentro del bundle cuando está empaquetado."""
+    base = getattr(sys, "_MEIPASS", HERE)
+    return os.path.join(base, rel)
+
+
+MENUBAR_ICON = _resource(os.path.join("assets", "menubar.png"))
+
+
 # ---- helpers HTTP a la API local ----------------------------------------
 def api_get(path):
     with urllib.request.urlopen(BASE + path, timeout=3) as r:
@@ -68,7 +77,14 @@ IDLE_INTERVAL = 10.0     # en reposo
 
 class MuesliBar(rumps.App):
     def __init__(self):
-        super().__init__("Muesli", title="🎙️", quit_button=None)
+        self._has_icon = os.path.exists(MENUBAR_ICON)
+        self._idle_title = "" if self._has_icon else "🎙️"
+        if self._has_icon:
+            # Ícono template (silueta monocroma que se adapta a barra clara/oscura).
+            super().__init__("Muesli", icon=MENUBAR_ICON, template=True,
+                             title="", quit_button=None)
+        else:
+            super().__init__("Muesli", title="🎙️", quit_button=None)
         self.mode = "full"
         self.recording = False
         self._t0 = None
@@ -163,7 +179,7 @@ class MuesliBar(rumps.App):
             self._t0 = time.time()
             self._notified = False
             self.record_item.title = "■ Detener"
-            self.title = "🔴 00:00"
+            self.title = "● 00:00"
         else:
             default = f"Reunión {datetime.datetime.now():%d/%m %H:%M}"
             title = default
@@ -185,7 +201,7 @@ class MuesliBar(rumps.App):
             self.recording = False
             self._t0 = None
             self.record_item.title = "● Grabar"
-            self.title = "⏳"
+            self.title = "…"
 
     def cancel_record(self, _):
         if not self.recording:
@@ -203,7 +219,7 @@ class MuesliBar(rumps.App):
         self._t0 = None
         self._notified = True  # no dispares la notificación de "detenida sola"
         self.record_item.title = "● Grabar"
-        self.title = "🎙️"
+        self.title = self._idle_title
         self.status_item.title = "Grabación cancelada"
 
     # ---- panel ----
@@ -263,7 +279,7 @@ class MuesliBar(rumps.App):
 
         if rec:
             el = int(time.time() - (self._t0 or time.time()))
-            self.title = f"🔴 {el // 60:02d}:{el % 60:02d}"
+            self.title = f"● {el // 60:02d}:{el % 60:02d}"
             self.status_item.title = "Grabando…"
             return
 
@@ -271,13 +287,13 @@ class MuesliBar(rumps.App):
             done = s.get("done_chunks", 0)
             tot = s.get("total_chunks")
             self.status_item.title = f"Transcribiendo {done}/{tot if tot else '…'}"
-            self.title = "⏳"
+            self.title = "…"
         elif st == "summarizing":
             self.status_item.title = "Resumiendo con Claude…"
-            self.title = "⏳"
+            self.title = "…"
         elif st == "done":
             self.status_item.title = "✓ Listo y guardado"
-            self.title = "🎙️"
+            self.title = self._idle_title
             if not self._notified:
                 res = s.get("result") or {}
                 note = res.get("note") or {}
@@ -286,13 +302,13 @@ class MuesliBar(rumps.App):
                 self._notified = True
         elif st == "error":
             self.status_item.title = "⚠️ Error (mirá el panel)"
-            self.title = "🎙️"
+            self.title = self._idle_title
             if not self._notified:
                 notify("Muesli", s.get("error") or "Falló el procesado")
                 self._notified = True
         else:
             self.status_item.title = "Listo"
-            self.title = "🎙️"
+            self.title = self._idle_title
 
 
 def main():
