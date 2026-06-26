@@ -523,6 +523,23 @@
   .enh-legend b{color:var(--text); font-weight:600;}
   .enh-legend .ai-sw{color:var(--text-faint); font-weight:600;}
 
+  /* Momentos clave (audio anclado) */
+  .moments-section{margin-top:20px; border-top:1px solid var(--border-soft); padding-top:18px;}
+  .moments-list{display:flex; flex-direction:column; gap:7px;}
+  .moment{
+    display:flex; align-items:center; gap:12px; width:100%; text-align:left; cursor:pointer;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:11px;
+    padding:9px 13px; font-family:inherit; font-size:14px; color:var(--text);
+    transition:border-color .12s ease, background .12s ease;
+  }
+  .moment:hover{border-color:var(--accent); background:var(--surface-3);}
+  .moment.no-audio{cursor:default;}
+  .moment.no-audio:hover{border-color:var(--border); background:var(--surface-2);}
+  .moment-t{font-variant-numeric:tabular-nums; font-weight:650; color:var(--accent-text); font-size:13px; min-width:46px;}
+  .moment-label{flex:1; line-height:1.4;}
+  .moment-play{color:var(--text-faint); font-size:11px;}
+  #notePlayer{width:100%; margin-top:11px;}
+
   @media (max-width:760px){
     body{grid-template-columns:1fr; height:auto; min-height:100%;}
     aside{border-right:none; border-bottom:1px solid var(--border-soft); max-height:40vh;}
@@ -919,6 +936,9 @@ async function pollStatus() {
       noteId: (s.result.note || {}).id, title: (s.result.note || {}).title,
       createdAt: (s.result.note || {}).created_at,
       manualNotes: (s.result.note || {}).manual_notes,
+      segmentsCount: (s.result.note || {}).segments_count,
+      chunkMap: (s.result.note || {}).chunk_map,
+      hasAudio: (s.result.note || {}).has_audio,
     });
     showNoteView();  // la grabación terminó: mostrá la nota, ocultá el compositor
     await loadList();
@@ -1029,6 +1049,8 @@ function render(o) {
   askHistory = [];  // chat fresco por cada nota que se abre
   const manualNotes = (o.manualNotes || "").trim();
   const enhancedNotes = (o.enhancedNotes || "").trim();
+  const hasSegments = (o.segmentsCount || 0) > 0;
+  const keyMoments = o.keyMoments || [];
   let header = "";
   if (noteId) {
     const dt = o.createdAt ? new Date(o.createdAt).toLocaleString("es") : "";
@@ -1087,18 +1109,96 @@ function render(o) {
         ? renderEnhanced(enhancedNotes)
         : '<div class="enh-hint">Tus notas, completadas por Claude con lo que se dijo en la reunión. Lo que agrega la IA se ve atenuado.</div>'}</div>
     </div>` : "";
+  // Momentos clave con salto al audio (solo si hay marcas de tiempo).
+  const momentsSection = (noteId && hasSegments) ? `
+    <div class="moments-section">
+      <div class="enh-head">
+        <span class="enh-title">Momentos clave</span>
+        <button class="edit-btn" onclick="loadMoments(${noteId})">⚡ ${keyMoments.length ? "Volver a detectar" : "Detectar momentos"}</button>
+      </div>
+      <div id="momentsOutput">${keyMoments.length
+        ? renderMoments(keyMoments, o.chunkMap || [], !!o.hasAudio, noteId)
+        : '<div class="enh-hint">Claude marca los momentos importantes con su minuto; tocás uno y saltás a esa parte del audio.</div>'}</div>
+      <audio id="notePlayer" controls preload="none" style="display:none"></audio>
+    </div>` : "";
   document.getElementById("result").innerHTML = `
     ${back}
     ${header}
     ${notion}
     ${summaryWarn}
     <div class="card">${mdToHtml(curSummary)}</div>
+    ${momentsSection}
     ${enhSection}
     ${actions}
     ${aiSection}
     <details><summary>Ver transcripción completa</summary>
       <div class="transcript">${(o.transcript || "").replace(/</g, "&lt;")}</div>
     </details>`;
+}
+
+let noteChunks = [];   // mapa de tramos de audio de la nota abierta
+let audioNoteId = null;
+
+function fmtTs(sec) {
+  sec = Math.floor(sec || 0);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const ss = String(s).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+function renderMoments(moments, chunkMap, hasAudio, noteId) {
+  if (!moments.length) return '<div class="enh-hint">No se detectaron momentos.</div>';
+  noteChunks = chunkMap || [];
+  audioNoteId = noteId;
+  const chips = moments.map(m => `
+    <button class="moment ${hasAudio ? "" : "no-audio"}" ${hasAudio ? `onclick="playMoment(${m.t})"` : ""}>
+      <span class="moment-t">${fmtTs(m.t)}</span>
+      <span class="moment-label">${escHtml(m.label)}</span>
+      ${hasAudio ? '<span class="moment-play">▶</span>' : ""}
+    </button>`).join("");
+  const hint = hasAudio
+    ? "Tocá un momento para escuchar esa parte del audio."
+    : "El audio ya no está (se borró), así que no se puede reproducir — quedan los momentos como referencia.";
+  return `<div class="moments-list">${chips}</div><div class="enh-hint" style="margin-top:9px">${hint}</div>`;
+}
+
+async function loadMoments(id) {
+  const out = document.getElementById("momentsOutput");
+  out.innerHTML = '<div class="enh-hint">Detectando momentos clave…</div>';
+  try {
+    const r = await fetch(`/api/notes/${id}/moments`, { method: "POST" });
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      out.innerHTML = `<div class="ai-warn">⚠ ${escHtml(d.error || "no pude detectar los momentos")}</div>`;
+      return;
+    }
+    out.innerHTML = renderMoments(d.moments || [], d.chunk_map || [], !!d.has_audio, id);
+  } catch (e) {
+    out.innerHTML = '<div class="ai-warn">⚠ Error de red.</div>';
+  }
+}
+
+function playMoment(t) {
+  const player = document.getElementById("notePlayer");
+  if (!player || !noteChunks.length) return;
+  let chunk = noteChunks[0];
+  for (const c of noteChunks) { if (t >= c.start) chunk = c; else break; }
+  const offset = Math.max(0, t - chunk.start);
+  const src = `/api/notes/${audioNoteId}/audio/${chunk.i}`;
+  player.style.display = "";
+  player.dataset.chunk = chunk.i;
+  player.onended = () => {  // al terminar un tramo, seguí con el siguiente
+    const pos = noteChunks.findIndex(c => c.i === parseInt(player.dataset.chunk));
+    const next = noteChunks[pos + 1];
+    if (next) { player.dataset.chunk = next.i; player.src = `/api/notes/${audioNoteId}/audio/${next.i}`; player.onloadedmetadata = () => player.play(); }
+  };
+  if (player.getAttribute("src") !== src) {
+    player.src = src;
+    player.onloadedmetadata = () => { try { player.currentTime = offset; } catch (e) {} player.play(); };
+  } else {
+    try { player.currentTime = offset; } catch (e) {}
+    player.play();
+  }
 }
 
 // Pinta las notas realzadas: tu texto normal, lo que agrega la IA (entre llaves dobles) atenuado.
@@ -1386,7 +1486,8 @@ async function openNote(id) {
   setStatus("");
   render({ summary: n.summary, transcript: n.transcript, noteId: n.id,
            title: n.title, createdAt: n.created_at, hasAudio: n.has_audio,
-           manualNotes: n.manual_notes, enhancedNotes: n.enhanced_notes });
+           manualNotes: n.manual_notes, enhancedNotes: n.enhanced_notes,
+           segmentsCount: n.segments_count, chunkMap: n.chunk_map, keyMoments: n.key_moments });
   if (!recording) showNoteView();  // ver nota a pantalla completa (salvo si estás grabando)
   await loadList();
 }

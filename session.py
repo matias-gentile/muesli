@@ -8,14 +8,26 @@ Estados: recording -> transcribing -> summarizing -> done | error
 """
 from __future__ import annotations
 
+import os
 import queue
 import threading
+import wave
 
 import notion_sync
 import storage
 import config
 from summarize import summarize, type_label
-from transcribe import transcribe
+from transcribe import transcribe_segments
+
+
+def _wav_seconds(path) -> float:
+    """Duración en segundos de un WAV (para acumular el offset global)."""
+    try:
+        with wave.open(str(path), "rb") as w:
+            fr = w.getframerate() or 1
+            return w.getnframes() / float(fr)
+    except Exception:
+        return 0.0
 
 
 class Session:
@@ -33,6 +45,9 @@ class Session:
         self.audio_dir = None
         self._cancelled = False
         self._transcripts: dict[int, str] = {}
+        self._segments: list = []       # [{"start": seg_global, "text": str}]
+        self._chunk_map: list = []      # [{"i", "start", "dur", "file"}] para reproducir
+        self._offset = 0.0              # segundos acumulados (inicio global del chunk actual)
         self._lock = threading.Lock()
         self._queue: "queue.Queue" = queue.Queue()
         self._worker = threading.Thread(target=self._run, daemon=True)
@@ -92,9 +107,18 @@ class Session:
                     break
                 index, path = item
                 self._set(status="transcribing")
-                text = transcribe(path)
+                text, segs = transcribe_segments(path)
+                dur = _wav_seconds(path)
                 with self._lock:
                     self._transcripts[index] = text
+                    base = self._offset
+                    for s in segs:
+                        self._segments.append({"start": round(base + s["start"], 2),
+                                               "text": s["text"]})
+                    self._chunk_map.append({"i": index, "start": round(base, 2),
+                                            "dur": round(dur, 2),
+                                            "file": os.path.basename(str(path))})
+                    self._offset += dur
                     self.done_chunks += 1
 
             if self._cancelled:
@@ -129,13 +153,17 @@ class Session:
                            f"guardada — podés regenerar el resumen desde el panel._")
 
             note = storage.save_note(self.title, transcript, summary,
-                                     self.manual_notes, self.audio_dir, self.context_type)
+                                     self.manual_notes, self.audio_dir, self.context_type,
+                                     segments=self._segments, chunk_map=self._chunk_map)
+            note["segments_count"] = len(self._segments)
+            note["chunk_map"] = self._chunk_map
+            note["has_audio"] = bool(self.audio_dir)
 
             # Privacidad/espacio: si está activado, borramos el audio apenas quedó transcripto.
             if config.get_bool("AUTO_PURGE_AUDIO"):
                 try:
                     storage.purge_note_audio(note["id"])
-                    note["hasAudio"] = False
+                    note["has_audio"] = False
                 except Exception as e:
                     print(f"[audio] no se pudo autoborrar el audio: {e}")
 

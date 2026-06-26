@@ -1,5 +1,6 @@
 """Persistencia: guarda cada reunión como Markdown y la indexa en SQLite."""
 import datetime
+import json
 import shutil
 import sqlite3
 from pathlib import Path
@@ -32,6 +33,12 @@ def _conn():
         c.execute("ALTER TABLE notes ADD COLUMN enhanced_notes TEXT")
     if "dialogue" not in cols:
         c.execute("ALTER TABLE notes ADD COLUMN dialogue TEXT")
+    if "segments" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN segments TEXT")        # timestamps por segmento
+    if "chunk_map" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN chunk_map TEXT")        # tramos de audio
+    if "key_moments" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN key_moments TEXT")      # momentos clave (cache)
     c.commit()
     return c
 
@@ -52,7 +59,8 @@ def _render_md(title, created, summary, manual_notes, transcript) -> str:
     )
 
 
-def save_note(title, transcript, summary, manual_notes="", audio_dir=None, ctype=None) -> dict:
+def save_note(title, transcript, summary, manual_notes="", audio_dir=None, ctype=None,
+              segments=None, chunk_map=None) -> dict:
     created = datetime.datetime.now()
     title = (title or "").strip() or "Reunión"
     fname = f"{created.strftime('%Y%m%d-%H%M%S')}-{_slugify(title)}.md"
@@ -62,10 +70,12 @@ def save_note(title, transcript, summary, manual_notes="", audio_dir=None, ctype
 
     c = _conn()
     cur = c.execute(
-        "INSERT INTO notes (title, created_at, path, transcript, summary, manual_notes, audio_dir, ctype) "
-        "VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO notes (title, created_at, path, transcript, summary, manual_notes, "
+        "audio_dir, ctype, segments, chunk_map) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (title, created.isoformat(), str(path), transcript, summary, manual_notes,
-         str(audio_dir) if audio_dir else None, ctype),
+         str(audio_dir) if audio_dir else None, ctype,
+         json.dumps(segments or [], ensure_ascii=False),
+         json.dumps(chunk_map or [], ensure_ascii=False)),
     )
     c.commit()
     note_id = cur.lastrowid
@@ -220,17 +230,39 @@ def get_note(note_id: int):
     c = _conn()
     r = c.execute(
         "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype, "
-        "audio_dir, enhanced_notes, dialogue FROM notes WHERE id=?",
+        "audio_dir, enhanced_notes, dialogue, segments, chunk_map, key_moments "
+        "FROM notes WHERE id=?",
         (note_id,),
     ).fetchone()
     c.close()
     if not r:
         return None
+
+    def _loads(s):
+        try:
+            return json.loads(s) if s else []
+        except Exception:
+            return []
+
     return {
         "id": r[0], "title": r[1], "created_at": r[2], "path": r[3],
         "transcript": r[4], "summary": r[5], "manual_notes": r[6], "ctype": r[7],
-        "has_audio": bool(r[8]), "enhanced_notes": r[9] or "", "dialogue": r[10] or "",
+        "has_audio": bool(r[8]), "audio_dir": r[8],
+        "enhanced_notes": r[9] or "", "dialogue": r[10] or "",
+        "segments": _loads(r[11]), "chunk_map": _loads(r[12]),
+        "key_moments": _loads(r[13]),
     }
+
+
+def update_key_moments(note_id: int, moments: list) -> bool:
+    """Guarda los momentos clave (cache) de una nota."""
+    c = _conn()
+    cur = c.execute("UPDATE notes SET key_moments=? WHERE id=?",
+                    (json.dumps(moments or [], ensure_ascii=False), note_id))
+    c.commit()
+    ok = cur.rowcount > 0
+    c.close()
+    return ok
 
 
 def update_enhanced_notes(note_id: int, enhanced_notes: str) -> bool:

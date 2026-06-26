@@ -5,6 +5,8 @@ SOLO en el material de la nota (transcripción + resumen + notas manuales). No i
 """
 from __future__ import annotations
 
+import re
+
 import config
 from anthropic import Anthropic
 
@@ -147,3 +149,43 @@ def dialogue(note: dict) -> str:
         "5. Respondé en el idioma de la transcripción. Devolvé SOLO el diálogo, sin comentarios."
     )
     return _complete(system, [{"role": "user", "content": transcript or "(vacía)"}], max_tokens=2200)
+
+
+def _fmt_ts(sec) -> str:
+    sec = int(sec or 0)
+    return f"{sec // 60:02d}:{sec % 60:02d}"
+
+
+def key_moments(note: dict) -> list:
+    """Detecta momentos clave y los ancla a un timestamp (usando los segmentos)."""
+    segs = note.get("segments") or []
+    if not segs:
+        return []
+    lines, total = [], 0
+    for s in segs:
+        line = f"[{_fmt_ts(s.get('start', 0))}] {s.get('text', '')}"
+        total += len(line) + 1
+        if total > _MAX_CONTEXT_CHARS:
+            break
+        lines.append(line)
+    system = (
+        "Te paso la transcripción de una reunión con marcas de tiempo [MM:SS]. Identificá los "
+        "MOMENTOS CLAVE (decisiones, compromisos, datos importantes, puntos de giro). Devolvé SOLO "
+        "una lista, UNA por línea, en el formato exacto 'MM:SS — etiqueta corta' (en español, "
+        "máximo ~8 palabras). Usá la marca de tiempo del momento en que ocurre. Entre 3 y 8 "
+        "momentos. No inventes nada que no esté en la transcripción."
+    )
+    raw = _complete(system, [{"role": "user", "content": "\n".join(lines)}], max_tokens=600)
+    moments = []
+    for line in raw.splitlines():
+        m = re.match(r"\s*(?:[-*]\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*[—\-–:]\s*(.+)", line)
+        if not m:
+            continue
+        if m.group(3):
+            t = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+        else:
+            t = int(m.group(1)) * 60 + int(m.group(2))
+        label = m.group(4).strip().strip('"').strip()
+        if label:
+            moments.append({"t": t, "label": label})
+    return moments

@@ -18,7 +18,7 @@ try:
     import sounddevice as sd
 except Exception:  # pragma: no cover
     sd = None
-from flask import Flask, Response, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, jsonify, render_template, request, send_file, send_from_directory
 
 import config
 import notion_sync
@@ -275,6 +275,10 @@ def note(note_id):
     n = storage.get_note(note_id)
     if not n:
         return jsonify({"error": "not_found"}), 404
+    n = dict(n)
+    n["segments_count"] = len(n.get("segments") or [])  # el front solo necesita saber si hay
+    n.pop("segments", None)                               # (los segmentos completos pesan)
+    n.pop("audio_dir", None)                              # no exponemos la ruta del disco
     return jsonify(n)
 
 
@@ -368,6 +372,43 @@ def action_items_note(note_id):
     except Exception as e:
         return jsonify({"error": f"No pude extraer los pendientes: {e}"}), 502
     return jsonify({"text": text})
+
+
+@app.route("/api/notes/<int:note_id>/moments", methods=["POST"])
+def moments_note(note_id):
+    n = storage.get_note(note_id)
+    if not n:
+        return jsonify({"error": "not_found"}), 404
+    payload = {"chunk_map": n.get("chunk_map") or [], "has_audio": bool(n.get("has_audio"))}
+    if n.get("key_moments"):
+        payload["moments"] = n["key_moments"]
+        return jsonify(payload)
+    if not (n.get("segments") or []):
+        return jsonify({"error": "Esta nota no tiene marcas de tiempo (se grabó antes de esta función)."}), 400
+    if not config.get("ANTHROPIC_API_KEY"):
+        return jsonify({"error": "Falta la API key de Claude (cargala en ⚙ Configuración)."}), 400
+    try:
+        moments = assistant.key_moments(n)
+    except Exception as e:
+        return jsonify({"error": f"No pude detectar los momentos: {e}"}), 502
+    storage.update_key_moments(note_id, moments)
+    payload["moments"] = moments
+    return jsonify(payload)
+
+
+@app.route("/api/notes/<int:note_id>/audio/<int:chunk_index>")
+def note_audio(note_id, chunk_index):
+    """Sirve el WAV del tramo pedido (con soporte de rango, para poder buscar)."""
+    n = storage.get_note(note_id)
+    if not n or not n.get("audio_dir"):
+        return jsonify({"error": "sin audio"}), 404
+    entry = next((e for e in (n.get("chunk_map") or []) if e.get("i") == chunk_index), None)
+    if not entry:
+        return jsonify({"error": "tramo inexistente"}), 404
+    fpath = Path(n["audio_dir"]) / entry["file"]
+    if not fpath.exists():
+        return jsonify({"error": "el audio de esta nota ya no está"}), 404
+    return send_file(str(fpath), mimetype="audio/wav", conditional=True)
 
 
 @app.route("/api/notes/<int:note_id>/dialogue", methods=["POST"])

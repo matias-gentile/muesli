@@ -30,13 +30,27 @@ def _get_model() -> WhisperModel:
     return _model
 
 
-def transcribe(wav_path) -> str:
-    """Devuelve la transcripción completa como texto plano."""
+def transcribe_segments(wav_path):
+    """Transcribe y devuelve (texto, [segmentos]) con timestamps por segmento.
+
+    Cada segmento: {"start": seg, "end": seg, "text": str} (tiempos relativos al WAV).
+    """
     model = _get_model()
     segments, info = model.transcribe(str(wav_path), vad_filter=config.get_bool("WHISPER_VAD"))
     print(f"[whisper] idioma detectado: {info.language} (p={info.language_probability:.2f})")
-    parts = [seg.text.strip() for seg in segments]
-    return " ".join(p for p in parts if p).strip()
+    segs = []
+    for seg in segments:
+        t = (seg.text or "").strip()
+        if t:
+            segs.append({"start": float(seg.start), "end": float(seg.end), "text": t})
+    text = " ".join(s["text"] for s in segs).strip()
+    return text, segs
+
+
+def transcribe(wav_path) -> str:
+    """Devuelve la transcripción completa como texto plano."""
+    text, _ = transcribe_segments(wav_path)
+    return text
 
 
 if __name__ == "__main__":

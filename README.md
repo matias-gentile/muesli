@@ -181,6 +181,11 @@ Dentro de una nota guardada tenés tres ayudas que usan tu API key de Claude y s
 - **💬 Diálogo:** reformatea la transcripción como conversación, infiriendo los cambios de
   orador del texto ("Orador 1", "Orador 2"). Es una aproximación (no detecta voces, no usa
   el audio), pero suele alcanzar para leer quién dijo qué. Se guarda para no regenerarlo.
+- **⚡ Momentos clave (audio anclado):** Claude marca los momentos importantes de la reunión
+  con su minuto exacto (decisiones, compromisos, datos). Si conservás el audio (auto-borrado
+  apagado), **tocás un momento y saltás a esa parte de la grabación** para escuchar las
+  palabras textuales — algo que apps en la nube no pueden hacer porque borran el audio. Si ya
+  borraste el audio, los momentos igual se muestran como referencia.
 
 Todo se genera localmente contra la API de Claude; nada se manda a terceros.
 
