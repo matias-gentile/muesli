@@ -30,6 +30,8 @@ def _conn():
         c.execute("ALTER TABLE notes ADD COLUMN ctype TEXT")
     if "enhanced_notes" not in cols:
         c.execute("ALTER TABLE notes ADD COLUMN enhanced_notes TEXT")
+    if "dialogue" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN dialogue TEXT")
     c.commit()
     return c
 
@@ -218,7 +220,7 @@ def get_note(note_id: int):
     c = _conn()
     r = c.execute(
         "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype, "
-        "audio_dir, enhanced_notes FROM notes WHERE id=?",
+        "audio_dir, enhanced_notes, dialogue FROM notes WHERE id=?",
         (note_id,),
     ).fetchone()
     c.close()
@@ -227,7 +229,7 @@ def get_note(note_id: int):
     return {
         "id": r[0], "title": r[1], "created_at": r[2], "path": r[3],
         "transcript": r[4], "summary": r[5], "manual_notes": r[6], "ctype": r[7],
-        "has_audio": bool(r[8]), "enhanced_notes": r[9] or "",
+        "has_audio": bool(r[8]), "enhanced_notes": r[9] or "", "dialogue": r[10] or "",
     }
 
 
@@ -235,6 +237,16 @@ def update_enhanced_notes(note_id: int, enhanced_notes: str) -> bool:
     """Guarda las notas realzadas (modo 'notas + IA') de una nota."""
     c = _conn()
     cur = c.execute("UPDATE notes SET enhanced_notes=? WHERE id=?", (enhanced_notes, note_id))
+    c.commit()
+    ok = cur.rowcount > 0
+    c.close()
+    return ok
+
+
+def update_dialogue(note_id: int, dialogue: str) -> bool:
+    """Guarda la transcripción formateada como diálogo (oradores inferidos)."""
+    c = _conn()
+    cur = c.execute("UPDATE notes SET dialogue=? WHERE id=?", (dialogue, note_id))
     c.commit()
     ok = cur.rowcount > 0
     c.close()

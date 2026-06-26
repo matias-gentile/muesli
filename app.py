@@ -370,6 +370,25 @@ def action_items_note(note_id):
     return jsonify({"text": text})
 
 
+@app.route("/api/notes/<int:note_id>/dialogue", methods=["POST"])
+def dialogue_note(note_id):
+    n = storage.get_note(note_id)
+    if not n:
+        return jsonify({"error": "not_found"}), 404
+    if (n.get("dialogue") or "").strip():
+        return jsonify({"text": n["dialogue"]})  # ya estaba generado: lo devolvemos cacheado
+    if not (n.get("transcript") or "").strip():
+        return jsonify({"error": "Esta nota no tiene transcripción para formatear."}), 400
+    if not config.get("ANTHROPIC_API_KEY"):
+        return jsonify({"error": "Falta la API key de Claude (cargala en ⚙ Configuración)."}), 400
+    try:
+        text = assistant.dialogue(n)
+    except Exception as e:
+        return jsonify({"error": f"No pude armar el diálogo: {e}"}), 502
+    storage.update_dialogue(note_id, text)
+    return jsonify({"text": text})
+
+
 @app.route("/api/notes/<int:note_id>/enhance", methods=["POST"])
 def enhance_note(note_id):
     n = storage.get_note(note_id)

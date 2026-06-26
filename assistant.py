@@ -125,3 +125,25 @@ def enhance_notes(note: dict) -> str:
     )
     content = f"=== NOTAS DEL USUARIO ===\n{manual or '(sin notas)'}\n\n=== TRANSCRIPCIÓN ===\n{transcript or '(vacía)'}"
     return _complete(system, [{"role": "user", "content": content}], max_tokens=1600)
+
+
+def dialogue(note: dict) -> str:
+    """Reformatea la transcripción como diálogo, infiriendo los cambios de orador del texto.
+
+    No es diarización real (no usa el audio): Claude deduce los turnos por el contenido.
+    Etiqueta 'Orador 1', 'Orador 2', etc., sin cambiar las palabras.
+    """
+    transcript = (note.get("transcript") or "").strip()
+    system = (
+        "Te paso la TRANSCRIPCIÓN corrida de una conversación, sin marcas de quién habla. "
+        "Reformateala como un DIÁLOGO infiriendo los cambios de orador por el contenido "
+        "(preguntas y respuestas, cambios de tema, tono). Reglas estrictas:\n"
+        "1. NO cambies las palabras: solo separá en turnos y agregá la etiqueta de orador.\n"
+        "2. Etiquetá a los participantes como 'Orador 1', 'Orador 2', etc. Si por el contexto "
+        "queda clarísimo un nombre propio, podés usarlo; si no, dejá 'Orador N'.\n"
+        "3. Cada turno en su propio párrafo, con la etiqueta en negrita, así: "
+        "'**Orador 1:** ...'. Separá los turnos con una línea en blanco.\n"
+        "4. Es una inferencia, no una certeza: ante la duda, mantené el mismo orador.\n"
+        "5. Respondé en el idioma de la transcripción. Devolvé SOLO el diálogo, sin comentarios."
+    )
+    return _complete(system, [{"role": "user", "content": transcript or "(vacía)"}], max_tokens=2200)

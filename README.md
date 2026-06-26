@@ -178,6 +178,9 @@ Dentro de una nota guardada tenés tres ayudas que usan tu API key de Claude y s
   con el detalle de lo que se dijo, en una sección aparte. Mantiene tus palabras y resalta
   (atenuado) lo que agrega la IA, para que veas qué es tuyo y qué completó Claude. El resumen
   normal no se toca.
+- **💬 Diálogo:** reformatea la transcripción como conversación, infiriendo los cambios de
+  orador del texto ("Orador 1", "Orador 2"). Es una aproximación (no detecta voces, no usa
+  el audio), pero suele alcanzar para leer quién dijo qué. Se guarda para no regenerarlo.
 
 Todo se genera localmente contra la API de Claude; nada se manda a terceros.
 
