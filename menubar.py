@@ -38,6 +38,64 @@ def _resource(rel: str) -> str:
 MENUBAR_ICON = _resource(os.path.join("assets", "menubar.png"))
 
 
+# WKWebView no maneja por sí solo los diálogos de JS (alert/confirm/prompt) ni los links
+# con target="_blank": hay que darle un WKUIDelegate. Lo definimos una sola vez (subclasear
+# una clase ObjC dos veces tira error) y lo cacheamos.
+_PANEL_UI_DELEGATE_CLASS = None
+
+
+def _panel_ui_delegate_class():
+    global _PANEL_UI_DELEGATE_CLASS
+    if _PANEL_UI_DELEGATE_CLASS is not None:
+        return _PANEL_UI_DELEGATE_CLASS
+    from Foundation import NSObject
+    from AppKit import NSAlert
+
+    def _alert(message, with_cancel):
+        a = NSAlert.alloc().init()
+        a.setMessageText_("Muesli")
+        a.setInformativeText_(message or "")
+        a.addButtonWithTitle_("Aceptar")
+        if with_cancel:
+            a.addButtonWithTitle_("Cancelar")
+        return a.runModal() == 1000  # NSAlertFirstButtonReturn
+
+    class _PanelUIDelegate(NSObject):
+        # Links target="_blank" / window.open → abrir en el navegador del sistema.
+        def webView_createWebViewWithConfiguration_forNavigationAction_windowFeatures_(
+                self, webView, configuration, navigationAction, windowFeatures):
+            try:
+                u = navigationAction.request().URL()
+                if u is not None:
+                    import webbrowser
+                    webbrowser.open(u.absoluteString())
+            except Exception:
+                pass
+            return None
+
+        def webView_runJavaScriptAlertPanelWithMessage_initiatedByFrame_completionHandler_(
+                self, webView, message, frame, completionHandler):
+            try:
+                _alert(message, False)
+            finally:
+                completionHandler()
+
+        def webView_runJavaScriptConfirmPanelWithMessage_initiatedByFrame_completionHandler_(
+                self, webView, message, frame, completionHandler):
+            ok = False
+            try:
+                ok = _alert(message, True)
+            finally:
+                completionHandler(bool(ok))
+
+        def webView_runJavaScriptTextInputPanelWithPrompt_defaultText_initiatedByFrame_completionHandler_(
+                self, webView, prompt, defaultText, frame, completionHandler):
+            completionHandler(defaultText)
+
+    _PANEL_UI_DELEGATE_CLASS = _PanelUIDelegate
+    return _PanelUIDelegate
+
+
 # ---- helpers HTTP a la API local ----------------------------------------
 def api_get(path):
     with urllib.request.urlopen(BASE + path, timeout=3) as r:
@@ -249,6 +307,12 @@ class MuesliBar(rumps.App):
             win.setReleasedWhenClosed_(False)
             web = WKWebView.alloc().initWithFrame_configuration_(
                 rect, WKWebViewConfiguration.alloc().init())
+            # Diálogos JS (confirm/alert) y links target="_blank" del panel.
+            try:
+                self._panel_ui_delegate = _panel_ui_delegate_class().alloc().init()
+                web.setUIDelegate_(self._panel_ui_delegate)
+            except Exception:
+                pass
             win.setContentView_(web)
             web.loadRequest_(NSURLRequest.requestWithURL_(
                 NSURL.URLWithString_("http://127.0.0.1:5001")))
