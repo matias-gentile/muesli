@@ -573,6 +573,7 @@
           </select>
         </label>
         <div class="test-hint" id="backendHint"></div>
+        <div id="blackholeOnly">
         <label class="fld">
           <span>Dispositivo de audio — Salida + micrófono</span>
           <select id="setDevFull"></select>
@@ -587,6 +588,7 @@
         </div>
         <div class="test-hint">Para "solo salida", poné algo a sonar durante la prueba (3 s).</div>
         <div id="testResult" class="test-result"></div>
+        </div>
 
         <label class="fld">
           <span>Modelo de Claude (resúmenes)</span>
@@ -1229,12 +1231,16 @@ async function recoverFolder(folder, label) {
 function updateBackendHint() {
   const v = document.getElementById("setBackend").value;
   const el = document.getElementById("backendHint");
+  const bh = document.getElementById("blackholeOnly");
   if (v === "screencapturekit") {
+    // Los dispositivos y los "Probar" son solo para BlackHole: los ocultamos.
+    if (bh) bh.style.display = "none";
     el.innerHTML = "Graba el audio del sistema con ScreenCaptureKit — <b>sin BlackHole ni Audio MIDI</b>. " +
       "Pide permiso de <b>Grabación de pantalla</b> (y de <b>Micrófono</b> si usás \"Salida + micrófono\", en macOS 15+). " +
       "El toggle de arriba del grabador elige si suma tu micrófono. No permite pausar todavía. " +
       "Requiere compilar el helper: <code>cd native && ./build.sh</code>.";
   } else {
+    if (bh) bh.style.display = "";
     el.textContent = "Graba sistema + micrófono vía BlackHole. Necesita el dispositivo agregado y los Multi-Output en Audio MIDI.";
   }
 }
@@ -1350,12 +1356,17 @@ function checkItem(ok, label, hint, optional) {
 
 function setupHtml(h, withDismiss) {
   const title = h.has_notes ? "Estado del setup" : "¡Bienvenido a Muesli! Configurá esto para empezar";
+  const sck = h.backend === "screencapturekit";
+  // En ScreenCaptureKit no hace falta BlackHole ni el dispositivo agregado.
+  const captureItems = sck
+    ? checkItem(true, "Captura: ScreenCaptureKit (sin BlackHole ni Audio MIDI)", "")
+    : checkItem(h.blackhole, "BlackHole instalado", 'Instalá <b>BlackHole</b> (driver de audio virtual gratis) y reiniciá la Mac.') +
+      checkItem(h.device.ok, "Dispositivo de audio: " + (h.device.name || ""), 'Elegí tu dispositivo agregado en ⚙ Configuración y tocá Probar.');
   return `
     ${withDismiss ? '<button class="banner-x" onclick="dismissBanner()" title="Ocultar">✕</button>' : ''}
     <div class="setup-title">${title}</div>
     <ul class="checklist">
-      ${checkItem(h.blackhole, "BlackHole instalado", 'Instalá <b>BlackHole</b> (driver de audio virtual gratis) y reiniciá la Mac.')}
-      ${checkItem(h.device.ok, "Dispositivo de audio: " + (h.device.name || ""), 'Elegí tu dispositivo agregado en ⚙ Configuración y tocá Probar.')}
+      ${captureItems}
       ${checkItem(h.api_key, "API key de Claude configurada", 'Pegá tu ANTHROPIC_API_KEY en ⚙ Configuración (o en el .env).')}
       ${checkItem(h.notion, "Notion conectado", 'Cargá tu API key y database ID de Notion en ⚙ Configuración.', true)}
     </ul>

@@ -255,6 +255,7 @@ def health():
     names = [d["name"].lower() for d in sd.query_devices()] if sd is not None else []
     dev_name = config.get("AUDIO_DEVICE_NAME")
     return jsonify({
+        "backend": config.get("CAPTURE_BACKEND"),
         "blackhole": any("blackhole" in n for n in names),
         "device": {"ok": find_input_device(dev_name) is not None, "name": dev_name},
         "api_key": bool(config.get("ANTHROPIC_API_KEY")),
