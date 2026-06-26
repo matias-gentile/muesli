@@ -94,11 +94,9 @@
   .wordmark{display:flex; align-items:center; gap:11px; padding:4px 8px; cursor:pointer; user-select:none;}
   .wordmark:hover h1{color:var(--accent-text);}
   .wordmark h1{transition:color .15s ease;}
-  .wordmark .seed{
-    width:15px; height:15px; border-radius:50% 50% 50% 2px;
-    background:linear-gradient(150deg,var(--accent),var(--accent-2));
-    transform:rotate(10deg);
-    box-shadow:0 2px 10px -2px var(--accent);
+  .wordmark .seed-img{
+    width:26px; height:26px; object-fit:contain; flex:none;
+    filter:drop-shadow(0 2px 8px rgba(0,0,0,.18));
   }
   .wordmark h1{
     font-family:var(--font-display); font-optical-sizing:auto;
@@ -497,7 +495,7 @@
 <body>
   <aside>
     <div class="wordmark" onclick="newRecording()" title="Nueva grabación">
-      <span class="seed"></span><h1>Muesli</h1>
+      <img class="seed-img" src="/favicon.png" alt=""><h1>Muesli</h1>
     </div>
     <button class="new-rec" onclick="newRecording()"><span class="plus">＋</span> Nueva grabación</button>
     <div class="side-section">

@@ -222,16 +222,45 @@ class MuesliBar(rumps.App):
         self.title = self._idle_title
         self.status_item.title = "Grabación cancelada"
 
-    # ---- panel ----
+    # ---- panel (ventana nativa con WKWebView, sin navegador ni subprocesos) ----
     def open_panel(self, _):
-        # En la app empaquetada no podemos lanzar "python panel.py": abrimos el navegador.
-        if getattr(sys, "frozen", False):
+        # Si ya está abierta, traela al frente.
+        if getattr(self, "_panel_window", None) is not None:
+            try:
+                from AppKit import NSApp
+                self._panel_window.makeKeyAndOrderFront_(None)
+                NSApp.activateIgnoringOtherApps_(True)
+                return
+            except Exception:
+                self._panel_window = None
+        try:
+            from AppKit import (NSWindow, NSBackingStoreBuffered, NSApp,
+                                NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
+                                NSWindowStyleMaskResizable, NSWindowStyleMaskMiniaturizable)
+            from WebKit import WKWebView, WKWebViewConfiguration
+            from Foundation import NSURL, NSURLRequest
+
+            rect = ((0.0, 0.0), (1040.0, 720.0))
+            style = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                     NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable)
+            win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+                rect, style, NSBackingStoreBuffered, False)
+            win.setTitle_("Muesli")
+            win.setReleasedWhenClosed_(False)
+            web = WKWebView.alloc().initWithFrame_configuration_(
+                rect, WKWebViewConfiguration.alloc().init())
+            win.setContentView_(web)
+            web.loadRequest_(NSURLRequest.requestWithURL_(
+                NSURL.URLWithString_("http://127.0.0.1:5001")))
+            win.center()
+            win.makeKeyAndOrderFront_(None)
+            NSApp.activateIgnoringOtherApps_(True)
+            self._panel_window = win
+        except Exception as e:
+            # Si WebKit no está disponible, caé al navegador para no quedar sin panel.
+            notify("Muesli", f"Abro el panel en el navegador ({e}).")
             import webbrowser
             webbrowser.open("http://127.0.0.1:5001")
-            return
-        if self._panel_proc is not None and self._panel_proc.poll() is None:
-            return  # ya está abierto
-        self._panel_proc = subprocess.Popen([sys.executable, os.path.join(HERE, "panel.py")])
 
     def quit_app(self, _):
         if self._panel_proc is not None and self._panel_proc.poll() is None:

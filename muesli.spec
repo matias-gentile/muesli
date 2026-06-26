@@ -40,7 +40,7 @@ except Exception:
     pass
 hiddenimports += [
     'rumps', 'objc', 'Foundation', 'AppKit', 'CoreFoundation',
-    'AVFoundation', 'Quartz',
+    'AVFoundation', 'WebKit', 'Quartz',
 ]
 
 block_cipher = None
