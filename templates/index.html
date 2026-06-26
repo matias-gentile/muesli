@@ -486,9 +486,11 @@
   .usage-model .um-name{color:var(--text-dim); font-variant-numeric:tabular-nums;}
   .usage-model .um-cost{color:var(--text); font-weight:650;}
   .spend-pill.over{color:var(--rec); border-color:var(--rec);}
-  .ai-followup{display:inline-flex; align-items:center; gap:6px;}
-  .ai-style-select{font-family:inherit; font-size:13px; padding:7px 9px; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer;}
-  .ai-style-select:hover{border-color:var(--accent);}
+  /* Chips de tono del seguimiento (sobre el resultado) */
+  .tone-chips{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:11px;}
+  .tone-chip{font-family:inherit; font-size:12.5px; padding:5px 13px; border-radius:999px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); cursor:pointer; transition:border-color .12s ease, color .12s ease, background .12s ease;}
+  .tone-chip:hover{border-color:var(--accent); color:var(--text);}
+  .tone-chip.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:650;}
   .ai-card{
     background:var(--surface-2); border:1px solid var(--border); border-radius:14px;
     padding:15px 17px; margin-bottom:14px;
@@ -1121,15 +1123,7 @@ function render(o) {
   const aiSection = noteId ? `
     <div class="ai-section">
       <div class="ai-tools">
-        <span class="ai-followup">
-          <select id="followupStyle" class="ai-style-select" title="Estilo del seguimiento">
-            <option value="cordial">Email cordial</option>
-            <option value="formal">Email formal</option>
-            <option value="slack">Mensaje de Slack</option>
-            <option value="breve">Mensaje breve</option>
-          </select>
-          <button class="edit-btn" onclick="genFollowup(${noteId})">✉ Generar seguimiento</button>
-        </span>
+        <button class="edit-btn" onclick="genFollowup(${noteId})">✉ Email de seguimiento</button>
         <button class="edit-btn" onclick="genActionItems(${noteId})">✓ Pendientes</button>
         <button class="edit-btn" onclick="genDialogue(${noteId})">💬 Diálogo</button>
       </div>
@@ -1406,11 +1400,57 @@ async function genAI(id, endpoint, title, copyMsg, body) {
   }
 }
 
-function genFollowup(id) {
-  const sel = document.getElementById("followupStyle");
-  const style = sel ? sel.value : "cordial";
-  const titles = { cordial: "Email de seguimiento", formal: "Email formal", slack: "Mensaje de Slack", breve: "Mensaje breve" };
-  genAI(id, "followup", titles[style] || "Email de seguimiento", "✓ Copiado.", { style });
+const FOLLOWUP_TONES = [
+  { key: "cordial", label: "Cordial" },
+  { key: "formal", label: "Formal" },
+  { key: "slack", label: "Slack" },
+  { key: "breve", label: "Breve" },
+];
+
+function lastTone() {
+  try { return localStorage.getItem("muesli-followup-tone") || "cordial"; } catch (e) { return "cordial"; }
+}
+
+function toneChips(id, active) {
+  return `<div class="tone-chips">` + FOLLOWUP_TONES.map(t =>
+    `<button class="tone-chip ${t.key === active ? "on" : ""}" onclick="genFollowup(${id}, '${t.key}')">${t.label}</button>`
+  ).join("") + `</div>`;
+}
+
+async function genFollowup(id, style) {
+  style = style || lastTone();
+  try { localStorage.setItem("muesli-followup-tone", style); } catch (e) {}
+  const label = (FOLLOWUP_TONES.find(t => t.key === style) || {}).label || "";
+  const out = document.getElementById("aiOutput");
+  out.innerHTML = `<div class="ai-card">
+      <div class="ai-card-head"><span class="ai-card-title">Seguimiento</span></div>
+      ${toneChips(id, style)}
+      <div class="ai-thinking">Redactando en tono ${label.toLowerCase()}…</div>
+    </div>`;
+  try {
+    const r = await fetch(`/api/notes/${id}/followup`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ style }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      out.innerHTML = `<div class="ai-card">${toneChips(id, style)}<div class="ai-warn">⚠ ${escHtml(d.error || "no pude redactar el seguimiento")}</div></div>`;
+      return;
+    }
+    lastAIText = d.text || "";
+    out.innerHTML = `<div class="ai-card">
+        <div class="ai-card-head">
+          <span class="ai-card-title">Seguimiento</span>
+          <button class="edit-btn" onclick="copyText(lastAIText, '✓ Copiado.')">⧉ Copiar</button>
+        </div>
+        ${toneChips(id, style)}
+        <div class="enh-hint" style="margin:-4px 0 10px">Tocá un tono para reescribirlo.</div>
+        <div class="ai-body">${escHtml(lastAIText)}</div>
+      </div>`;
+    updateSpendPill();
+  } catch (e) {
+    out.innerHTML = `<div class="ai-card"><div class="ai-warn">⚠ Error de red.</div></div>`;
+  }
 }
 function genActionItems(id) { genAI(id, "action-items", "Pendientes", "✓ Pendientes copiados."); }
 
