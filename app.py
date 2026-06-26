@@ -370,6 +370,23 @@ def action_items_note(note_id):
     return jsonify({"text": text})
 
 
+@app.route("/api/notes/<int:note_id>/enhance", methods=["POST"])
+def enhance_note(note_id):
+    n = storage.get_note(note_id)
+    if not n:
+        return jsonify({"error": "not_found"}), 404
+    if not (n.get("manual_notes") or "").strip():
+        return jsonify({"error": "Esta nota no tiene notas manuales para realzar."}), 400
+    if not config.get("ANTHROPIC_API_KEY"):
+        return jsonify({"error": "Falta la API key de Claude (cargala en ⚙ Configuración)."}), 400
+    try:
+        text = assistant.enhance_notes(n)
+    except Exception as e:
+        return jsonify({"error": f"No pude realzar las notas: {e}"}), 502
+    storage.update_enhanced_notes(note_id, text)
+    return jsonify({"text": text})
+
+
 @app.route("/api/notes/<int:note_id>/purge-audio", methods=["POST"])
 def purge_one_note_audio(note_id):
     """Libera el audio (.wav) de una sola nota, conservando la nota."""

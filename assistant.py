@@ -101,3 +101,27 @@ def action_items(note: dict) -> str:
         "el material."
     )
     return _complete(system, [{"role": "user", "content": _note_context(note)}], max_tokens=800)
+
+
+def enhance_notes(note: dict) -> str:
+    """Realza las notas manuales del usuario: mantiene sus palabras y completa con lo dicho.
+
+    Lo que AGREGA la IA va envuelto en {{...}} para poder pintarlo distinto en el front.
+    """
+    manual = (note.get("manual_notes") or "").strip()
+    transcript = (note.get("transcript") or "").strip()
+    system = (
+        "Te paso las NOTAS que tomó una persona durante una reunión (sueltas, abreviadas) y la "
+        "TRANSCRIPCIÓN de lo que se dijo. Devolvé las notas REALZADAS siguiendo estas reglas estrictas:\n"
+        "1. Mantené las palabras y el orden de las notas del usuario TAL CUAL (no las reescribas).\n"
+        "2. Completá cada punto con el detalle real de la transcripción (datos, números, quién dijo "
+        "qué, contexto). TODO lo que agregues vos, envolvelo entre dobles llaves: {{texto agregado}}.\n"
+        "3. Si algo importante apareció en la reunión y el usuario no lo anotó, agregalo como una "
+        "línea nueva COMPLETAMENTE entre llaves: {{- nuevo punto}}.\n"
+        "4. No inventes nada que no esté en la transcripción. Si un punto del usuario no se tocó en "
+        "la reunión, dejalo sin agregado.\n"
+        "5. Respondé en español, conservando el formato de lista. Devolvé SOLO las notas realzadas, "
+        "sin encabezados ni comentarios tuyos."
+    )
+    content = f"=== NOTAS DEL USUARIO ===\n{manual or '(sin notas)'}\n\n=== TRANSCRIPCIÓN ===\n{transcript or '(vacía)'}"
+    return _complete(system, [{"role": "user", "content": content}], max_tokens=1600)

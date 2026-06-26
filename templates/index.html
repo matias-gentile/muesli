@@ -505,6 +505,21 @@
   .ask-send:hover{filter:brightness(1.04);}
   .ask-send:disabled{opacity:.5; cursor:default; filter:none;}
 
+  /* Notas realzadas: tus palabras + lo que completa la IA (atenuado) */
+  .enh-section{margin-top:20px; border-top:1px solid var(--border-soft); padding-top:18px;}
+  .enh-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:11px;}
+  .enh-title{font-family:var(--font-display); font-size:17px; font-weight:600; color:var(--text);}
+  .enh-hint{font-size:13px; color:var(--text-faint); line-height:1.5;}
+  .enh-body{
+    white-space:pre-wrap; word-break:break-word; font-size:14.5px; line-height:1.7;
+    color:var(--text); font-weight:500;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:14px; padding:15px 17px;
+  }
+  .enh-body .ai-add{color:var(--text-faint); font-weight:400;}  /* lo que agrega la IA */
+  .enh-legend{font-size:11.5px; color:var(--text-faint); margin-top:9px; display:flex; gap:14px; flex-wrap:wrap;}
+  .enh-legend b{color:var(--text); font-weight:600;}
+  .enh-legend .ai-sw{color:var(--text-faint); font-weight:600;}
+
   @media (max-width:760px){
     body{grid-template-columns:1fr; height:auto; min-height:100%;}
     aside{border-right:none; border-bottom:1px solid var(--border-soft); max-height:40vh;}
@@ -900,6 +915,7 @@ async function pollStatus() {
       summaryError: s.result.summary_error,
       noteId: (s.result.note || {}).id, title: (s.result.note || {}).title,
       createdAt: (s.result.note || {}).created_at,
+      manualNotes: (s.result.note || {}).manual_notes,
     });
     showNoteView();  // la grabación terminó: mostrá la nota, ocultá el compositor
     await loadList();
@@ -1008,6 +1024,8 @@ function render(o) {
   const noteId = o.noteId || null;
   curSummary = o.summary || "";
   askHistory = [];  // chat fresco por cada nota que se abre
+  const manualNotes = (o.manualNotes || "").trim();
+  const enhancedNotes = (o.enhancedNotes || "").trim();
   let header = "";
   if (noteId) {
     const dt = o.createdAt ? new Date(o.createdAt).toLocaleString("es") : "";
@@ -1054,17 +1072,53 @@ function render(o) {
         <button id="askSend" class="ask-send" onclick="askNote(${noteId})">Preguntar</button>
       </div>
     </div>` : "";
+  // Sección "notas realzadas" (solo si tomaste notas). No toca el resumen normal.
+  const enhSection = (noteId && manualNotes) ? `
+    <div class="enh-section">
+      <div class="enh-head">
+        <span class="enh-title">Mis notas realzadas</span>
+        <button class="edit-btn" onclick="enhanceNotes(${noteId})">✨ ${enhancedNotes ? "Volver a realzar" : "Realzar mis notas"}</button>
+      </div>
+      <div id="enhOutput">${enhancedNotes
+        ? renderEnhanced(enhancedNotes)
+        : '<div class="enh-hint">Tus notas, completadas por Claude con lo que se dijo en la reunión. Lo que agrega la IA se ve atenuado.</div>'}</div>
+    </div>` : "";
   document.getElementById("result").innerHTML = `
     ${back}
     ${header}
     ${notion}
     ${summaryWarn}
     <div class="card">${mdToHtml(curSummary)}</div>
+    ${enhSection}
     ${actions}
     ${aiSection}
     <details><summary>Ver transcripción completa</summary>
       <div class="transcript">${(o.transcript || "").replace(/</g, "&lt;")}</div>
     </details>`;
+}
+
+// Pinta las notas realzadas: tu texto normal, lo que agrega la IA (entre llaves dobles) atenuado.
+function renderEnhanced(text) {
+  const esc = escHtml(text);
+  const withAI = esc.replace(/\{\{([\s\S]*?)\}\}/g, '<span class="ai-add">$1</span>');
+  return `<div class="enh-body">${withAI}</div>
+    <div class="enh-legend"><span><b>Negrita</b> = tus notas</span><span><span class="ai-sw">Atenuado</span> = lo que completó Claude</span></div>`;
+}
+
+async function enhanceNotes(id) {
+  const out = document.getElementById("enhOutput");
+  out.innerHTML = '<div class="enh-hint">Realzando tus notas con Claude…</div>';
+  try {
+    const r = await fetch(`/api/notes/${id}/enhance`, { method: "POST" });
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      out.innerHTML = `<div class="ai-warn">⚠ ${escHtml(d.error || "no pude realzar las notas")}</div>`;
+      return;
+    }
+    out.innerHTML = renderEnhanced(d.text || "");
+  } catch (e) {
+    out.innerHTML = '<div class="ai-warn">⚠ Error de red.</div>';
+  }
 }
 
 function editSummary(id) {
@@ -1303,7 +1357,8 @@ async function openNote(id) {
   const n = await r.json();
   setStatus("");
   render({ summary: n.summary, transcript: n.transcript, noteId: n.id,
-           title: n.title, createdAt: n.created_at, hasAudio: n.has_audio });
+           title: n.title, createdAt: n.created_at, hasAudio: n.has_audio,
+           manualNotes: n.manual_notes, enhancedNotes: n.enhanced_notes });
   if (!recording) showNoteView();  // ver nota a pantalla completa (salvo si estás grabando)
   await loadList();
 }

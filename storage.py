@@ -28,6 +28,8 @@ def _conn():
         c.execute("ALTER TABLE notes ADD COLUMN audio_dir TEXT")
     if "ctype" not in cols:
         c.execute("ALTER TABLE notes ADD COLUMN ctype TEXT")
+    if "enhanced_notes" not in cols:
+        c.execute("ALTER TABLE notes ADD COLUMN enhanced_notes TEXT")
     c.commit()
     return c
 
@@ -69,6 +71,7 @@ def save_note(title, transcript, summary, manual_notes="", audio_dir=None, ctype
     return {
         "id": note_id, "title": title, "created_at": created.isoformat(),
         "path": str(path), "summary": summary, "ctype": ctype,
+        "manual_notes": manual_notes,
     }
 
 
@@ -214,8 +217,8 @@ def list_notes() -> list:
 def get_note(note_id: int):
     c = _conn()
     r = c.execute(
-        "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype, audio_dir "
-        "FROM notes WHERE id=?",
+        "SELECT id, title, created_at, path, transcript, summary, manual_notes, ctype, "
+        "audio_dir, enhanced_notes FROM notes WHERE id=?",
         (note_id,),
     ).fetchone()
     c.close()
@@ -224,8 +227,18 @@ def get_note(note_id: int):
     return {
         "id": r[0], "title": r[1], "created_at": r[2], "path": r[3],
         "transcript": r[4], "summary": r[5], "manual_notes": r[6], "ctype": r[7],
-        "has_audio": bool(r[8]),
+        "has_audio": bool(r[8]), "enhanced_notes": r[9] or "",
     }
+
+
+def update_enhanced_notes(note_id: int, enhanced_notes: str) -> bool:
+    """Guarda las notas realzadas (modo 'notas + IA') de una nota."""
+    c = _conn()
+    cur = c.execute("UPDATE notes SET enhanced_notes=? WHERE id=?", (enhanced_notes, note_id))
+    c.commit()
+    ok = cur.rowcount > 0
+    c.close()
+    return ok
 
 
 def note_markdown(note_id: int):

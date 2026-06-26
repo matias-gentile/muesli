@@ -174,6 +174,10 @@ Dentro de una nota guardada tenés tres ayudas que usan tu API key de Claude y s
   conversación mientras tengas la nota abierta.
 - **✉ Email de seguimiento:** redacta un follow-up listo para copiar (asunto + cuerpo).
 - **✓ Pendientes:** extrae los action items en una lista con responsables y fechas.
+- **✨ Realzar mis notas:** si tomaste notas durante la reunión, completa **tus** notas
+  con el detalle de lo que se dijo, en una sección aparte. Mantiene tus palabras y resalta
+  (atenuado) lo que agrega la IA, para que veas qué es tuyo y qué completó Claude. El resumen
+  normal no se toca.
 
 Todo se genera localmente contra la API de Claude; nada se manda a terceros.
 
