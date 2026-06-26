@@ -20,7 +20,7 @@
     --border-soft:#EEE9DE;
     --text:#2A2620;
     --text-dim:#6F6658;
-    --text-faint:#A39A8A;
+    --text-faint:#867C6D;
     --accent:#EC9F2D;
     --accent-2:#DA861A;
     --accent-text:#B06E08;
@@ -199,7 +199,6 @@
   .test-hint{font-size:12px; color:var(--text-faint); margin-top:-4px;}
   .test-hint a{color:var(--accent-text); text-decoration:none; font-weight:600;}
   .test-hint a:hover{text-decoration:underline;}
-  .test-result{font-size:13px; font-weight:600; min-height:18px;}
   .storage-info{font-size:13px; color:var(--text-dim); line-height:1.5;}
   .edit-btn.danger{color:var(--rec); border-color:var(--rec);}
   .edit-btn.danger:hover{background:color-mix(in srgb, var(--rec) 10%, transparent);}
@@ -209,7 +208,7 @@
     font-size:12px; font-weight:600; transition:background .12s ease;
   }
   .pause-btn:hover{background:var(--surface-3);}
-  .pause-btn.paused{background:var(--accent); color:#fff; border-color:var(--accent-text);}
+  .pause-btn.paused{background:var(--accent); color:var(--accent-ink); border-color:var(--accent-text);}
   .kbd-hint{font-size:11px; color:var(--text-faint); margin-top:10px;}
   .kbd-hint kbd{
     background:var(--surface-2); border:1px solid var(--border); border-radius:5px;
@@ -248,7 +247,7 @@
   .recover-main .d{font-size:11px; color:var(--text-faint); margin-top:2px;}
   .recover-btn{
     flex-shrink:0; border:1px solid var(--accent-text); background:var(--accent);
-    color:#fff; cursor:pointer; font-size:12px; font-weight:600;
+    color:var(--accent-ink); cursor:pointer; font-size:12px; font-weight:600;
     padding:5px 10px; border-radius:8px; transition:filter .12s ease;
   }
   .recover-btn:hover{filter:brightness(1.05);}
@@ -476,7 +475,7 @@
   /* Panel de gasto estimado */
   .usage-box{margin-top:4px; font-size:13.5px; color:var(--text-dim); line-height:1.55;}
   .usage-cost{font-family:var(--font-display); font-size:26px; font-weight:600; color:var(--text); line-height:1.1;}
-  .usage-cost .u-cur{font-size:14px; color:var(--text-faint); font-family:var(--font-body); font-weight:500;}
+  .usage-cost .u-cur{font-size:14px; color:var(--text-faint); font-family:var(--font-ui); font-weight:500;}
   .usage-sub{font-size:12.5px; color:var(--text-faint); margin-top:3px;}
   .usage-bar{height:9px; border-radius:6px; background:var(--surface-3); overflow:hidden; margin:11px 0 4px;}
   .usage-bar > span{display:block; height:100%; background:var(--accent); border-radius:6px; transition:width .3s ease;}
@@ -1782,10 +1781,8 @@ async function loadHealth() {
   let h;
   try { h = await (await fetch("/api/health")).json(); } catch (e) { return; }
   const banner = document.getElementById("setupBanner");
-  // En SCK no hace falta BlackHole ni dispositivo agregado: lo único imprescindible es la API key.
-  const critical = (h.backend === "screencapturekit")
-    ? !h.api_key
-    : (!h.api_key || !h.device.ok || !h.blackhole);
+  // Con ScreenCaptureKit lo único imprescindible es la API key de Claude.
+  const critical = !h.api_key;
   if (bannerDismissed || (!critical && h.has_notes)) {
     banner.style.display = "none";
   } else {
@@ -1810,12 +1807,8 @@ function checkItem(ok, label, hint, optional) {
 
 function setupHtml(h, withDismiss) {
   const title = h.has_notes ? "Estado del setup" : "¡Bienvenido a Muesli! Configurá esto para empezar";
-  const sck = h.backend === "screencapturekit";
-  // En ScreenCaptureKit no hace falta BlackHole ni el dispositivo agregado.
-  const captureItems = sck
-    ? checkItem(true, "Captura: ScreenCaptureKit (sin BlackHole ni Audio MIDI)", "")
-    : checkItem(h.blackhole, "BlackHole instalado", 'Instalá <b>BlackHole</b> (driver de audio virtual gratis) y reiniciá la Mac.') +
-      checkItem(h.device.ok, "Dispositivo de audio: " + (h.device.name || ""), 'Elegí tu dispositivo agregado en ⚙ Configuración y tocá Probar.');
+  // Muesli graba con ScreenCaptureKit: no necesita BlackHole ni Audio MIDI.
+  const captureItems = checkItem(true, "Captura: ScreenCaptureKit (sin BlackHole ni Audio MIDI)", "");
   return `
     ${withDismiss ? '<button class="banner-x" onclick="dismissBanner()" title="Ocultar">✕</button>' : ''}
     <div class="setup-title">${title}</div>
