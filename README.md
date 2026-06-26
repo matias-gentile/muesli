@@ -161,6 +161,10 @@ un campo.)
 arriba aparece un **checklist de bienvenida** que te dice exactamente qué configurar. El
 mismo estado lo tenés siempre dentro de **⚙ Configuración**.
 
+**API key de Claude:** podés pegarla directamente en **⚙ Configuración → API key de Claude**
+(se guarda local en tu Mac). Es la forma recomendada para la app empaquetada (`.app`), que no
+usa `.env`. En desarrollo también podés ponerla en el `.env`.
+
 ---
 
 ## Usar desde la barra de menú (sin navegador)

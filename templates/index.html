@@ -197,6 +197,8 @@
   }
   .test-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   .test-hint{font-size:12px; color:var(--text-faint); margin-top:-4px;}
+  .test-hint a{color:var(--accent-text); text-decoration:none; font-weight:600;}
+  .test-hint a:hover{text-decoration:underline;}
   .test-result{font-size:13px; font-weight:600; min-height:18px;}
   .storage-info{font-size:13px; color:var(--text-dim); line-height:1.5;}
   .edit-btn.danger{color:var(--rec); border-color:var(--rec);}
@@ -590,6 +592,12 @@
         <div id="testResult" class="test-result"></div>
         </div>
 
+        <div class="fld-sep">Claude (Anthropic)</div>
+        <label class="fld">
+          <span>API key de Claude</span>
+          <input id="setKey" type="password" autocomplete="off" placeholder="dejá vacío para no cambiar" />
+        </label>
+        <div class="test-hint">Tu clave <code>sk-ant-…</code> de <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Hace falta para generar los resúmenes. Se guarda local en tu Mac.</div>
         <label class="fld">
           <span>Modelo de Claude (resúmenes)</span>
           <input id="setClaude" type="text" placeholder="claude-sonnet-4-6" />
@@ -1262,6 +1270,9 @@ async function openSettings() {
   fillDeviceSelect("setDevOut", s.AUDIO_DEVICE_OUTPUT_ONLY);
   document.getElementById("setBackend").value = s.CAPTURE_BACKEND || "blackhole";
   updateBackendHint();
+  document.getElementById("setKey").value = "";
+  document.getElementById("setKey").placeholder =
+    s.ANTHROPIC_API_KEY_set ? "•••••• configurada — vacío = no cambiar" : "pegá tu sk-ant-… acá";
   document.getElementById("setClaude").value = s.CLAUDE_MODEL || "";
   document.getElementById("setWhisper").value = s.WHISPER_MODEL || "base";
   document.getElementById("setChunk").value = s.CHUNK_SECONDS || "600";
@@ -1300,6 +1311,8 @@ async function saveSettings() {
   };
   const nk = document.getElementById("setNotionKey").value.trim();
   if (nk) body.NOTION_API_KEY = nk;
+  const ak = document.getElementById("setKey").value.trim();
+  if (ak) body.ANTHROPIC_API_KEY = ak;
   try {
     await fetch("/api/settings", {
       method: "POST", headers: { "Content-Type": "application/json" },
