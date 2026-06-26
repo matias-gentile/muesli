@@ -159,7 +159,9 @@ un campo.)
 
 **Primer uso:** si falta algo del setup (BlackHole, dispositivo de audio o API key),
 arriba aparece un **checklist de bienvenida** que te dice exactamente qué configurar. El
-mismo estado lo tenés siempre dentro de **⚙ Configuración**.
+mismo estado lo tenés siempre dentro de **⚙ Configuración**. La primera vez también se abre
+un **tutorial guiado**; podés volver a verlo cuando quieras con **❓ Cómo usar Muesli** (abajo
+a la izquierda).
 
 **API key de Claude:** podés pegarla directamente en **⚙ Configuración → API key de Claude**
 (se guarda local en tu Mac). Es la forma recomendada para la app empaquetada (`.app`), que no

@@ -540,6 +540,24 @@
   .moment-play{color:var(--text-faint); font-size:11px;}
   #notePlayer{width:100%; margin-top:11px;}
 
+  /* Tutorial on-demand (usa .overlay para el fondo) */
+  .tut-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    width:min(440px,100%); padding:30px 30px 22px; box-shadow:var(--shadow);
+    text-align:center; animation:rise .25s ease both;
+  }
+  .tut-icon{font-size:44px; line-height:1; margin-bottom:14px;}
+  .tut-title{font-family:var(--font-display); font-size:23px; font-weight:600; margin:0 0 10px; color:var(--text);}
+  .tut-body{font-size:15px; line-height:1.65; color:var(--text-dim); margin:0 0 20px;}
+  .tut-body code{background:var(--surface-3); padding:1px 6px; border-radius:5px; font-size:13px;}
+  .tut-dots{display:flex; gap:7px; justify-content:center; margin-bottom:20px;}
+  .tut-dot{width:8px; height:8px; border-radius:50%; border:none; padding:0; cursor:pointer; background:var(--border); transition:background .15s ease, transform .15s ease;}
+  .tut-dot.on{background:var(--accent); transform:scale(1.25);}
+  .tut-foot{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .tut-skip{background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:13px; font-family:inherit; padding:8px 4px;}
+  .tut-skip:hover{color:var(--text-dim);}
+  .tut-nav{display:flex; gap:8px;}
+
   @media (max-width:760px){
     body{grid-template-columns:1fr; height:auto; min-height:100%;}
     aside{border-right:none; border-bottom:1px solid var(--border-soft); max-height:40vh;}
@@ -577,6 +595,7 @@
     </div>
     <div id="recoverable" class="side-section"></div>
     <div class="side-bottom">
+      <button class="settings-btn" onclick="startTutorial()">❓ Cómo usar Muesli</button>
       <button class="settings-btn" id="themeBtn" onclick="toggleTheme()">🌙 Modo oscuro</button>
       <button class="settings-btn" onclick="openSettings()">⚙ Configuración</button>
       <div class="side-foot">Local y privado · todo corre en tu Mac</div>
@@ -628,6 +647,10 @@
     <div id="status" class="status"></div>
     <div id="result"></div>
   </main>
+
+  <div id="tutorialOverlay" class="overlay" style="display:none" onclick="if(event.target===this)closeTutorial()">
+    <div id="tutorialCard" class="tut-card"></div>
+  </div>
 
   <div id="settingsOverlay" class="overlay" style="display:none">
     <div class="modal">
@@ -1762,6 +1785,14 @@ async function purgeOrphans() {
 }
 
 document.addEventListener("keydown", (e) => {
+  const tov = document.getElementById("tutorialOverlay");
+  const tutOpen = tov && tov.style.display !== "none";
+  if (tutOpen) {
+    if (e.key === "Escape") closeTutorial();
+    else if (e.key === "ArrowRight") tutNext();
+    else if (e.key === "ArrowLeft") tutBack();
+    return;
+  }
   const ov = document.getElementById("settingsOverlay");
   const modalOpen = ov && ov.style.display !== "none";
   if (e.key === "Escape" && modalOpen) { closeSettings(); return; }
@@ -1777,6 +1808,54 @@ loadList();
 loadRecoverable();
 loadHealth();
 updateThemeBtn();
+
+// ---- Tutorial on-demand (botón ❓) + auto la primera vez ----
+const TUTORIAL = [
+  { icon: "🥣", title: "Bienvenido a Muesli", body: "Muesli graba tus reuniones, las <b>transcribe en tu Mac</b> y arma un resumen con IA. Todo local y privado. Te muestro lo básico en un minuto." },
+  { icon: "🔑", title: "1 · Cargá tu API key de Claude", body: "En <b>⚙ Configuración → API key de Claude</b> pegá tu clave <code>sk-ant-…</code> (de console.anthropic.com). Es lo único imprescindible: sin ella no hay resúmenes." },
+  { icon: "🎧", title: "2 · Elegí qué grabar", body: "En Configuración, <b>Fuente de captura → ScreenCaptureKit</b> graba el audio del sistema <b>sin instalar nada</b>. El modo <b>Salida + micrófono</b> suma tu voz. macOS te pedirá permiso de Grabación de pantalla y Micrófono la primera vez." },
+  { icon: "⏺️", title: "3 · Grabá tu reunión", body: "Tocá <b>● Grabar</b>, elegí el tipo (reunión, clase, entrevista…) y, si querés, anotá ideas sueltas en <b>Mis notas</b> mientras hablan. Al terminar, <b>Detener</b>: Muesli transcribe y resume solo." },
+  { icon: "✨", title: "4 · Exprimí cada nota", body: "En una nota podés <b>preguntarle</b> a la reunión, generar un <b>email de seguimiento</b> y <b>pendientes</b>, <b>realzar tus notas</b>, ver el <b>diálogo</b> y los <b>momentos clave</b> con salto al audio." },
+  { icon: "🔒", title: "5 · Privado por diseño", body: "La transcripción corre en tu Mac y el audio queda local. Si querés, activá el <b>auto-borrado del audio</b> en Configuración para que se borre apenas se transcribe." },
+  { icon: "🎉", title: "¡Listo!", body: "Eso es todo lo básico. Podés <b>repetir este tutorial cuando quieras</b> con el botón <b>❓ Cómo usar Muesli</b>, abajo a la izquierda." },
+];
+let tutStep = 0;
+
+function startTutorial() {
+  tutStep = 0;
+  document.getElementById("tutorialOverlay").style.display = "flex";
+  renderTutorial();
+}
+function closeTutorial() {
+  document.getElementById("tutorialOverlay").style.display = "none";
+  try { localStorage.setItem("muesli-tutorial-done", "1"); } catch (e) {}
+}
+function tutNext() { if (tutStep < TUTORIAL.length - 1) { tutStep++; renderTutorial(); } else { closeTutorial(); } }
+function tutBack() { if (tutStep > 0) { tutStep--; renderTutorial(); } }
+function tutGo(i) { tutStep = i; renderTutorial(); }
+function renderTutorial() {
+  const s = TUTORIAL[tutStep];
+  const last = tutStep === TUTORIAL.length - 1, first = tutStep === 0;
+  const dots = TUTORIAL.map((_, i) => `<button class="tut-dot ${i === tutStep ? "on" : ""}" onclick="tutGo(${i})" aria-label="Paso ${i + 1}"></button>`).join("");
+  document.getElementById("tutorialCard").innerHTML = `
+    <div class="tut-icon">${s.icon}</div>
+    <h2 class="tut-title">${s.title}</h2>
+    <p class="tut-body">${s.body}</p>
+    <div class="tut-dots">${dots}</div>
+    <div class="tut-foot">
+      <button class="tut-skip" onclick="closeTutorial()">${last ? "Cerrar" : "Saltar"}</button>
+      <div class="tut-nav">
+        ${first ? "" : '<button class="edit-btn" onclick="tutBack()">Atrás</button>'}
+        <button class="regen-btn" onclick="tutNext()">${last ? "Empezar a usar" : "Siguiente →"}</button>
+      </div>
+    </div>`;
+}
+// Primera vez: abrilo solo.
+(function () {
+  let done = false;
+  try { done = localStorage.getItem("muesli-tutorial-done") === "1"; } catch (e) {}
+  if (!done) startTutorial();
+})();
 </script>
 </body>
 </html>
