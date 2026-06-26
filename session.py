@@ -13,6 +13,7 @@ import threading
 
 import notion_sync
 import storage
+import config
 from summarize import summarize, type_label
 from transcribe import transcribe
 
@@ -129,6 +130,14 @@ class Session:
 
             note = storage.save_note(self.title, transcript, summary,
                                      self.manual_notes, self.audio_dir, self.context_type)
+
+            # Privacidad/espacio: si está activado, borramos el audio apenas quedó transcripto.
+            if config.get_bool("AUTO_PURGE_AUDIO"):
+                try:
+                    storage.purge_note_audio(note["id"])
+                    note["hasAudio"] = False
+                except Exception as e:
+                    print(f"[audio] no se pudo autoborrar el audio: {e}")
 
             notion_url, notion_error = None, None
             if summary_error is None and notion_sync.is_enabled():

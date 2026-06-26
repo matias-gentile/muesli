@@ -683,6 +683,14 @@
         </label>
 
         <div class="fld-sep">Almacenamiento</div>
+        <label class="fld">
+          <span>Borrar el audio automáticamente al terminar</span>
+          <select id="setAutoPurge">
+            <option value="0">No — conservar el audio</option>
+            <option value="1">Sí — borrar al transcribir (privacidad y espacio)</option>
+          </select>
+        </label>
+        <div class="test-hint">Como Granola: si lo activás, el .wav se borra apenas la reunión queda transcripta. Conservás la nota y la transcripción, pero no vas a poder re-transcribir esa grabación.</div>
         <div id="storageInfo" class="storage-info">Calculando uso de disco…</div>
         <div class="test-row">
           <button class="edit-btn" onclick="purgeProcessed()">Liberar audio procesado</button>
@@ -1410,6 +1418,7 @@ async function openSettings() {
   document.getElementById("setChunk").value = s.CHUNK_SECONDS || "600";
   document.getElementById("setAutoStop").value = s.AUTO_STOP_SILENCE_MIN || "0";
   document.getElementById("setMaxRec").value = s.MAX_RECORDING_MIN || "0";
+  document.getElementById("setAutoPurge").value = s.AUTO_PURGE_AUDIO || "0";
   document.getElementById("setNotionKey").value = "";
   document.getElementById("setNotionKey").placeholder =
     s.NOTION_API_KEY_set ? "•••••• configurado — vacío = no cambiar" : "dejá vacío para no cambiar";
@@ -1439,6 +1448,7 @@ async function saveSettings() {
     CAPTURE_BACKEND: document.getElementById("setBackend").value,
     AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
     MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,
+    AUTO_PURGE_AUDIO: document.getElementById("setAutoPurge").value,
     NOTION_DATABASE_ID: document.getElementById("setNotionDb").value.trim(),
   };
   const nk = document.getElementById("setNotionKey").value.trim();
