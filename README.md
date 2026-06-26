@@ -195,7 +195,10 @@ python menubar.py
 Vas a ver un 🎙️ en la barra de menú. Desde ahí:
 
 - **● Grabar / ■ Detener**: graba y para. Mientras grabás, el ícono muestra el
-  cronómetro (🔴 00:34). Al detener te pide un nombre para la reunión.
+  cronómetro (● 00:34). Al detener te pide un nombre para la reunión.
+- **Indicador flotante**: mientras grabás aparece una pastilla flotante (● + cronómetro)
+  sobre cualquier app y en todos los escritorios, para que nunca dudes si está grabando
+  (estilo Granola). La podés arrastrar a donde quieras; desaparece al detener.
 - **✕ Cancelar grabación**: descarta lo que estás grabando (borra el audio, no guarda
   nota). Pide confirmación.
 - **Estado en vivo**: "Transcribiendo 3/12…", "Resumiendo con Claude…", y una
@@ -404,6 +407,7 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 | `CHUNK_SECONDS` | Duración de cada segmento de grabación (por defecto `600` = 10 min) |
 | `AUTO_STOP_SILENCE_MIN` | Minutos de silencio seguidos antes de cortar sola (`0` = desactivado; por defecto `15`) |
 | `MAX_RECORDING_MIN` | Tope duro de duración en minutos (`0` = desactivado; por defecto `180` = 3 h) |
+| `AUTO_PURGE_AUDIO` | Borrar el `.wav` automáticamente al terminar de transcribir (`1` = sí, `0` = no; por defecto `0`) |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
 | `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
 

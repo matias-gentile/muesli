@@ -331,6 +331,90 @@ class MuesliBar(rumps.App):
             self._panel_proc.terminate()
         rumps.quit_application()
 
+    # ---- indicador flotante de grabación (mini-ventana siempre visible) ----
+    def _ensure_float(self):
+        if getattr(self, "_float_win", None) is not None:
+            return self._float_win
+        try:
+            from AppKit import (
+                NSPanel, NSWindowStyleMaskBorderless, NSWindowStyleMaskNonactivatingPanel,
+                NSBackingStoreBuffered, NSColor, NSTextField, NSView, NSFont, NSScreen,
+                NSStatusWindowLevel, NSWindowCollectionBehaviorCanJoinAllSpaces,
+                NSWindowCollectionBehaviorStationary, NSWindowCollectionBehaviorFullScreenAuxiliary)
+            w, h = 116.0, 34.0
+            rect = ((0.0, 0.0), (w, h))
+            style = NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+            win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+                rect, style, NSBackingStoreBuffered, False)
+            win.setOpaque_(False)
+            win.setBackgroundColor_(NSColor.clearColor())
+            win.setLevel_(NSStatusWindowLevel)         # flota por encima de otras apps
+            win.setHasShadow_(True)
+            win.setMovableByWindowBackground_(True)     # se puede arrastrar
+            win.setCollectionBehavior_(
+                NSWindowCollectionBehaviorCanJoinAllSpaces
+                | NSWindowCollectionBehaviorStationary
+                | NSWindowCollectionBehaviorFullScreenAuxiliary)  # en todos los escritorios
+
+            content = NSView.alloc().initWithFrame_(rect)
+            content.setWantsLayer_(True)
+            content.layer().setCornerRadius_(13.0)
+            content.layer().setBackgroundColor_(
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(0.09, 0.08, 0.07, 0.93).CGColor())
+            win.setContentView_(content)
+
+            dot = NSView.alloc().initWithFrame_(((14.0, h / 2 - 4.5), (9.0, 9.0)))
+            dot.setWantsLayer_(True)
+            dot.layer().setCornerRadius_(4.5)
+            dot.layer().setBackgroundColor_(
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(0.88, 0.29, 0.24, 1.0).CGColor())
+            content.addSubview_(dot)
+
+            label = NSTextField.alloc().initWithFrame_(((30.0, 7.0), (w - 38.0, 20.0)))
+            label.setBezeled_(False)
+            label.setDrawsBackground_(False)
+            label.setEditable_(False)
+            label.setSelectable_(False)
+            label.setTextColor_(NSColor.whiteColor())
+            label.setFont_(NSFont.monospacedDigitSystemFontOfSize_weight_(13.0, 0.0))
+            label.setStringValue_("00:00")
+            content.addSubview_(label)
+            self._float_label = label
+
+            try:  # arriba-centro, justo debajo de la barra de menú
+                vf = NSScreen.mainScreen().visibleFrame()
+                x = vf.origin.x + (vf.size.width - w) / 2.0
+                y = vf.origin.y + vf.size.height - h - 8.0
+                win.setFrameOrigin_((x, y))
+            except Exception:
+                pass
+
+            self._float_win = win
+            return win
+        except Exception as e:
+            print(f"[float] no pude crear el indicador flotante: {e}")
+            self._float_win = None
+            return None
+
+    def _show_float(self, text):
+        win = self._ensure_float()
+        if win is None:
+            return
+        try:
+            self._float_label.setStringValue_(text)
+            if not win.isVisible():
+                win.orderFrontRegardless()
+        except Exception:
+            pass
+
+    def _hide_float(self):
+        win = getattr(self, "_float_win", None)
+        if win is not None and win.isVisible():
+            try:
+                win.orderOut_(None)
+            except Exception:
+                pass
+
     # ---- polling de estado ----
     def _set_interval(self, interval):
         """Cambia la cadencia del timer (rápido/lento) sin recrearlo a mano."""
@@ -374,7 +458,9 @@ class MuesliBar(rumps.App):
             el = int(time.time() - (self._t0 or time.time()))
             self.title = f"● {el // 60:02d}:{el % 60:02d}"
             self.status_item.title = "Grabando…"
+            self._show_float(f"{el // 60:02d}:{el % 60:02d}")
             return
+        self._hide_float()  # cualquier estado que no sea grabando: ocultá el flotante
 
         if st == "transcribing":
             done = s.get("done_chunks", 0)
