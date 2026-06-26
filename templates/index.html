@@ -473,6 +473,19 @@
   /* Asistente sobre la nota: chat + tarjetas de email/pendientes */
   .ai-section{margin-top:22px; border-top:1px solid var(--border-soft); padding-top:18px;}
   .ai-tools{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;}
+  /* Panel de gasto estimado */
+  .usage-box{margin-top:4px; font-size:13.5px; color:var(--text-dim); line-height:1.55;}
+  .usage-cost{font-family:var(--font-display); font-size:26px; font-weight:600; color:var(--text); line-height:1.1;}
+  .usage-cost .u-cur{font-size:14px; color:var(--text-faint); font-family:var(--font-body); font-weight:500;}
+  .usage-sub{font-size:12.5px; color:var(--text-faint); margin-top:3px;}
+  .usage-bar{height:9px; border-radius:6px; background:var(--surface-3); overflow:hidden; margin:11px 0 4px;}
+  .usage-bar > span{display:block; height:100%; background:var(--accent); border-radius:6px; transition:width .3s ease;}
+  .usage-bar.over > span{background:var(--rec);}
+  .usage-models{margin-top:11px; display:flex; flex-direction:column; gap:5px;}
+  .usage-model{display:flex; justify-content:space-between; gap:8px; font-size:12.5px; padding:6px 10px; background:var(--surface-2); border:1px solid var(--border-soft); border-radius:8px;}
+  .usage-model .um-name{color:var(--text-dim); font-variant-numeric:tabular-nums;}
+  .usage-model .um-cost{color:var(--text); font-weight:650;}
+  .spend-pill.over{color:var(--rec); border-color:var(--rec);}
   .ai-followup{display:inline-flex; align-items:center; gap:6px;}
   .ai-style-select{font-family:inherit; font-size:13px; padding:7px 9px; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer;}
   .ai-style-select:hover{border-color:var(--accent);}
@@ -598,6 +611,7 @@
     </div>
     <div id="recoverable" class="side-section"></div>
     <div class="side-bottom">
+      <button class="settings-btn spend-pill" id="spendPill" onclick="openSettings()" style="display:none"></button>
       <button class="settings-btn" onclick="startTutorial()">❓ Cómo usar Muesli</button>
       <button class="settings-btn" id="themeBtn" onclick="toggleTheme()">🌙 Modo oscuro</button>
       <button class="settings-btn" onclick="openSettings()">⚙ Configuración</button>
@@ -748,6 +762,17 @@
           (conserva la nota y la transcripción). "Borrar sin procesar" elimina grabaciones
           que todavía no transcribiste — esas no se pueden recuperar después.
         </div>
+
+        <div class="fld-sep">Uso y gasto (estimado)</div>
+        <label class="fld">
+          <span>Presupuesto mensual (USD)</span>
+          <input id="setBudget" type="number" min="0" step="1" placeholder="0 = sin límite" />
+        </label>
+        <div id="usageBox" class="usage-box">Calculando gasto…</div>
+        <div class="test-row">
+          <button class="edit-btn danger" onclick="resetUsage()">Reiniciar contador</button>
+        </div>
+        <div class="test-hint">Estimación local: Muesli cuenta los tokens reales de cada respuesta y los multiplica por el precio del modelo. No es el saldo oficial de tu cuenta — ese lo ves en <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener">console.anthropic.com</a>.</div>
       </div>
       <div class="modal-foot">
         <button class="edit-btn" onclick="closeSettings()">Cancelar</button>
@@ -1342,6 +1367,7 @@ async function askNote(id) {
       thinking.textContent = d.answer || "(sin respuesta)";
       askHistory.push({ role: "user", content: q });
       askHistory.push({ role: "assistant", content: d.answer || "" });
+      updateSpendPill();
     }
   } catch (e) {
     thinking.classList.remove("thinking");
@@ -1374,6 +1400,7 @@ async function genAI(id, endpoint, title, copyMsg, body) {
         </div>
         <div class="ai-body">${escHtml(lastAIText)}</div>
       </div>`;
+    updateSpendPill();
   } catch (e) {
     out.innerHTML = `<div class="ai-card"><div class="ai-warn">⚠ Error de red.</div></div>`;
   }
@@ -1424,6 +1451,7 @@ async function loadList() {
   const r = await fetch("/api/notes");
   allNotes = await r.json();
   renderList(document.getElementById("search").value);
+  updateSpendPill();
 }
 
 function compactDate(iso) {
@@ -1621,8 +1649,11 @@ async function openSettings() {
   document.getElementById("setNotionKey").placeholder =
     s.NOTION_API_KEY_set ? "•••••• configurado — vacío = no cambiar" : "dejá vacío para no cambiar";
   document.getElementById("setNotionDb").value = s.NOTION_DATABASE_ID || "";
+  const b = parseFloat(s.MONTHLY_BUDGET_USD || "0");
+  document.getElementById("setBudget").value = (b > 0) ? s.MONTHLY_BUDGET_USD : "";
   loadHealth();
   loadStorage();
+  loadUsage();
 }
 
 function onModelChange() {
@@ -1644,6 +1675,7 @@ async function saveSettings() {
     AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
     MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,
     AUTO_PURGE_AUDIO: document.getElementById("setAutoPurge").value,
+    MONTHLY_BUDGET_USD: document.getElementById("setBudget").value || "0",
     NOTION_DATABASE_ID: document.getElementById("setNotionDb").value.trim(),
   };
   const nk = document.getElementById("setNotionKey").value.trim();
@@ -1658,7 +1690,52 @@ async function saveSettings() {
     closeSettings();
     setStatus("✓ Configuración guardada.");
     loadHealth();
+    updateSpendPill();
   } catch (e) { setStatus("⚠️ No se pudo guardar la configuración."); }
+}
+
+function fmtUSD(n) { return "$" + (n || 0).toFixed(2); }
+function fmtTok(n) { n = n || 0; if (n >= 1e6) return (n / 1e6).toFixed(2) + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + "k"; return String(n); }
+
+async function loadUsage() {
+  const box = document.getElementById("usageBox");
+  if (!box) return;
+  let d;
+  try { d = await (await fetch("/api/usage")).json(); }
+  catch (e) { box.textContent = "No pude calcular el gasto."; return; }
+  const m = d.month || {}, a = d.all_time || {}, budget = d.budget || 0;
+  let html = `<div class="usage-cost">${fmtUSD(m.cost)} <span class="u-cur">este mes${m.has_unknown ? " +?" : ""}</span></div>`;
+  html += `<div class="usage-sub">${m.calls || 0} llamadas · ${fmtTok(m.input_tokens)} tokens entrada · ${fmtTok(m.output_tokens)} salida</div>`;
+  if (budget > 0) {
+    const ratio = m.cost / budget;
+    const over = m.cost > budget;
+    html += `<div class="usage-bar ${over ? "over" : ""}"><span style="width:${Math.min(100, ratio * 100)}%"></span></div>`;
+    html += `<div class="usage-sub">${fmtUSD(m.cost)} de ${fmtUSD(budget)} (${Math.round(ratio * 100)}%)${over ? " — ¡pasaste el presupuesto!" : ""}</div>`;
+  }
+  if ((m.by_model || []).length) {
+    html += `<div class="usage-models">` + m.by_model.map(x =>
+      `<div class="usage-model"><span class="um-name">${escHtml(x.model)} · ${x.calls}×</span><span class="um-cost">${x.cost == null ? "—" : fmtUSD(x.cost)}</span></div>`).join("") + `</div>`;
+  }
+  html += `<div class="usage-sub" style="margin-top:9px">Histórico total: ${fmtUSD(a.cost)}${a.has_unknown ? " +?" : ""} · ${a.calls || 0} llamadas</div>`;
+  if (m.has_unknown || a.has_unknown) html += `<div class="usage-sub">"+?": hay un modelo personalizado sin precio conocido; sus tokens se cuentan pero no su costo.</div>`;
+  box.innerHTML = html;
+}
+
+async function resetUsage() {
+  if (!confirm("¿Reiniciar el contador de gasto? Borra el historial de uso (no toca tus notas).")) return;
+  try { await fetch("/api/usage/reset", { method: "POST" }); loadUsage(); updateSpendPill(); } catch (e) {}
+}
+
+async function updateSpendPill() {
+  const pill = document.getElementById("spendPill");
+  if (!pill) return;
+  try {
+    const d = await (await fetch("/api/usage")).json();
+    const cost = (d.month || {}).cost || 0, budget = d.budget || 0;
+    pill.style.display = "";
+    pill.textContent = budget > 0 ? `💳 ${fmtUSD(cost)} / ${fmtUSD(budget)} este mes` : `💳 ${fmtUSD(cost)} este mes`;
+    pill.classList.toggle("over", budget > 0 && cost > budget);
+  } catch (e) { pill.style.display = "none"; }
 }
 
 async function loadHealth() {

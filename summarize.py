@@ -8,6 +8,7 @@ estructurado en Markdown, adaptado al contexto. Es el equivalente a las
 from anthropic import Anthropic
 
 import config
+import usage
 
 BASE_SYSTEM = """Eres un asistente experto en sintetizar lo que ocurre en una \
 grabación de audio transcrita automáticamente. Recibes:
@@ -190,14 +191,16 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     client = Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
                        max_retries=4, timeout=180)  # reintenta cortes de red transitorios
     messages = [{"role": "user", "content": user_content}]
+    model = config.get("CLAUDE_MODEL")
     full = ""
     for _ in range(5):  # si la respuesta se corta por longitud, la continúa
         message = client.messages.create(
-            model=config.get("CLAUDE_MODEL"),
+            model=model,
             max_tokens=max_tokens,
             system=system,
             messages=messages,
         )
+        usage.record_response(model, message, "resumen")
         part = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
         full += part
         if getattr(message, "stop_reason", None) != "max_tokens":

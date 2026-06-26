@@ -52,6 +52,8 @@ _DEFAULTS = {
     "MAX_RECORDING_MIN": os.getenv("MAX_RECORDING_MIN", "180"),
     # Si está en "1", borra el audio (.wav) automáticamente al terminar de transcribir.
     "AUTO_PURGE_AUDIO": os.getenv("AUTO_PURGE_AUDIO", "0"),
+    # Presupuesto mensual estimado para la API de Claude (USD). "0" = sin presupuesto.
+    "MONTHLY_BUDGET_USD": os.getenv("MONTHLY_BUDGET_USD", "0"),
     "NOTION_API_KEY": os.getenv("NOTION_API_KEY", ""),
     "NOTION_DATABASE_ID": os.getenv("NOTION_DATABASE_ID", ""),
 }

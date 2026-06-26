@@ -25,6 +25,7 @@ import notion_sync
 import storage
 import transcribe
 import assistant
+import usage
 from audio_capture import ChunkedRecorder, find_input_device, record_test
 from config import RECORDINGS_DIR
 from screen_capture import ScreenCaptureRecorder
@@ -123,6 +124,19 @@ def post_settings():
     config.update(data)
     transcribe.reset_model()  # por si cambió el modelo de Whisper
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/usage")
+def get_usage():
+    """Gasto estimado (tokens reales × precio del modelo) + presupuesto mensual."""
+    data = usage.summary()
+    data["budget"] = config.get_float("MONTHLY_BUDGET_USD", 0)
+    return jsonify(data)
+
+
+@app.route("/api/usage/reset", methods=["POST"])
+def reset_usage():
+    return jsonify({"ok": usage.reset()})
 
 
 @app.route("/api/test-audio", methods=["POST"])

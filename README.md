@@ -167,6 +167,13 @@ a la izquierda).
 (se guarda local en tu Mac). Es la forma recomendada para la app empaquetada (`.app`), que no
 usa `.env`. En desarrollo también podés ponerla en el `.env`.
 
+**Gasto estimado y presupuesto:** Muesli cuenta los **tokens reales** que devuelve cada
+respuesta de la API y los multiplica por el precio del modelo, así tenés una idea de cuánto
+llevás gastado **este mes** (lo ves en la barra lateral y en detalle dentro de **⚙ Configuración →
+Uso y gasto**). Podés fijar un **presupuesto mensual** y ver una barra de progreso. No es el saldo
+oficial de tu cuenta —ese vive en console.anthropic.com— sino un estimado local de lo que gastás
+con Muesli.
+
 ### Asistente sobre cada nota
 Dentro de una nota guardada tenés tres ayudas que usan tu API key de Claude y se basan
 **solo en el material de esa reunión** (no inventan):

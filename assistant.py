@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 
 import config
+import usage
 from anthropic import Anthropic
 
 # Tope de caracteres del material que mandamos como contexto (evita prompts gigantes en
@@ -42,13 +43,15 @@ def _complete(system: str, messages: list, max_tokens: int = 1200) -> str:
     client = _client()
     full = ""
     msgs = list(messages)
+    model = config.get("CLAUDE_MODEL")
     for _ in range(4):
         m = client.messages.create(
-            model=config.get("CLAUDE_MODEL"),
+            model=model,
             max_tokens=max_tokens,
             system=system,
             messages=msgs,
         )
+        usage.record_response(model, m, "asistente")
         part = "".join(b.text for b in m.content if getattr(b, "type", None) == "text")
         full += part
         if getattr(m, "stop_reason", None) != "max_tokens":
