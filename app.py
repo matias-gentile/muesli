@@ -24,6 +24,7 @@ import config
 import notion_sync
 import storage
 import transcribe
+import assistant
 from audio_capture import ChunkedRecorder, find_input_device, record_test
 from config import RECORDINGS_DIR
 from screen_capture import ScreenCaptureRecorder
@@ -314,6 +315,59 @@ def resummarize(note_id):
 
     storage.update_summary(note_id, summary)
     return jsonify({"summary": summary, "id": note_id})
+
+
+def _note_or_404(note_id):
+    """Carga la nota validando que tenga material; devuelve (note, error_response)."""
+    n = storage.get_note(note_id)
+    if not n:
+        return None, (jsonify({"error": "not_found"}), 404)
+    if not (n.get("transcript") or "").strip() and not (n.get("summary") or "").strip():
+        return None, (jsonify({"error": "Esta nota no tiene contenido para analizar."}), 400)
+    if not config.get("ANTHROPIC_API_KEY"):
+        return None, (jsonify({"error": "Falta la API key de Claude (cargala en ⚙ Configuración)."}), 400)
+    return n, None
+
+
+@app.route("/api/notes/<int:note_id>/ask", methods=["POST"])
+def ask_note(note_id):
+    n, err = _note_or_404(note_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "Escribí una pregunta."}), 400
+    history = data.get("history") or []
+    try:
+        answer = assistant.ask(n, question, history)
+    except Exception as e:
+        return jsonify({"error": f"No pude responder: {e}"}), 502
+    return jsonify({"answer": answer})
+
+
+@app.route("/api/notes/<int:note_id>/followup", methods=["POST"])
+def followup_note(note_id):
+    n, err = _note_or_404(note_id)
+    if err:
+        return err
+    try:
+        text = assistant.followup_email(n)
+    except Exception as e:
+        return jsonify({"error": f"No pude redactar el email: {e}"}), 502
+    return jsonify({"text": text})
+
+
+@app.route("/api/notes/<int:note_id>/action-items", methods=["POST"])
+def action_items_note(note_id):
+    n, err = _note_or_404(note_id)
+    if err:
+        return err
+    try:
+        text = assistant.action_items(n)
+    except Exception as e:
+        return jsonify({"error": f"No pude extraer los pendientes: {e}"}), 502
+    return jsonify({"text": text})
 
 
 @app.route("/api/notes/<int:note_id>/purge-audio", methods=["POST"])

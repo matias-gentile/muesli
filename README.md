@@ -165,6 +165,18 @@ mismo estado lo tenés siempre dentro de **⚙ Configuración**.
 (se guarda local en tu Mac). Es la forma recomendada para la app empaquetada (`.app`), que no
 usa `.env`. En desarrollo también podés ponerla en el `.env`.
 
+### Asistente sobre cada nota
+Dentro de una nota guardada tenés tres ayudas que usan tu API key de Claude y se basan
+**solo en el material de esa reunión** (no inventan):
+
+- **Preguntale a esta reunión:** un chat para consultar la nota en lenguaje natural
+  ("¿qué quedó pendiente para mí?", "¿qué dijo Juan del precio?"). Mantiene el hilo de la
+  conversación mientras tengas la nota abierta.
+- **✉ Email de seguimiento:** redacta un follow-up listo para copiar (asunto + cuerpo).
+- **✓ Pendientes:** extrae los action items en una lista con responsables y fechas.
+
+Todo se genera localmente contra la API de Claude; nada se manda a terceros.
+
 ---
 
 ## Usar desde la barra de menú (sin navegador)

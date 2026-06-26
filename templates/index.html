@@ -470,6 +470,41 @@
   }
   .back-link:hover{color:var(--accent-text); gap:8px;}
 
+  /* Asistente sobre la nota: chat + tarjetas de email/pendientes */
+  .ai-section{margin-top:22px; border-top:1px solid var(--border-soft); padding-top:18px;}
+  .ai-tools{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;}
+  .ai-card{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:14px;
+    padding:15px 17px; margin-bottom:14px;
+  }
+  .ai-card-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:9px;}
+  .ai-card-title{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--text-faint);}
+  .ai-body{white-space:pre-wrap; word-break:break-word; font-size:14px; line-height:1.6; color:var(--text);}
+  .ai-thinking{color:var(--text-faint); font-style:italic; font-size:14px;}
+  .ai-warn{color:var(--rec); font-size:13px; font-weight:600;}
+  .ask-eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text-faint); margin:2px 0 10px 2px;
+  }
+  .ask-log{display:flex; flex-direction:column; gap:10px; margin-bottom:11px;}
+  .ask-msg{padding:10px 13px; border-radius:13px; font-size:14px; line-height:1.55; max-width:90%; white-space:pre-wrap; word-break:break-word;}
+  .ask-msg.user{align-self:flex-end; background:var(--accent-glow); border:1px solid var(--accent); color:var(--text);}
+  .ask-msg.bot{align-self:flex-start; background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim);}
+  .ask-msg.bot.thinking{color:var(--text-faint); font-style:italic;}
+  .ask-row{display:flex; gap:8px;}
+  .ask-input{
+    flex:1; padding:11px 14px; border-radius:11px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:14px; font-family:inherit; outline:none;
+  }
+  .ask-input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);}
+  .ask-send{
+    padding:11px 18px; border-radius:11px; cursor:pointer; border:none; white-space:nowrap;
+    background:linear-gradient(140deg,var(--accent),var(--accent-2)); color:var(--accent-ink);
+    font-weight:650; font-size:14px; font-family:inherit; transition:filter .12s ease;
+  }
+  .ask-send:hover{filter:brightness(1.04);}
+  .ask-send:disabled{opacity:.5; cursor:default; filter:none;}
+
   @media (max-width:760px){
     body{grid-template-columns:1fr; height:auto; min-height:100%;}
     aside{border-right:none; border-bottom:1px solid var(--border-soft); max-height:40vh;}
@@ -674,6 +709,8 @@ let audioMode = "full";  // "full" = salida + micrófono, "output" = solo salida
 let captureBackend = "blackhole";  // backend activo (lo setea /api/start); cambia los hints
 let levelTimer = null, lastPartialLen = -1;
 let curSummary = "";  // resumen crudo de la nota abierta (para editar)
+let askHistory = [];  // historial del chat "preguntale a la nota" (se resetea por nota)
+let lastAIText = "";  // último texto generado (email/pendientes) para copiar
 let allNotes = [], templateLabels = {};  // cache de la lista + value->label de tipos
 let deviceList = [];  // dispositivos de entrada (para el panel de Configuración)
 let paused = false, pausedMs = 0, pauseStart = 0;  // estado de pausa
@@ -962,6 +999,7 @@ function render(o) {
   o = o || {};
   const noteId = o.noteId || null;
   curSummary = o.summary || "";
+  askHistory = [];  // chat fresco por cada nota que se abre
   let header = "";
   if (noteId) {
     const dt = o.createdAt ? new Date(o.createdAt).toLocaleString("es") : "";
@@ -992,6 +1030,22 @@ function render(o) {
         ${purgeBtn}
       </div>` : "";
   const back = noteId ? `<button class="back-link" onclick="newRecording()">← Volver</button>` : "";
+  const aiSection = noteId ? `
+    <div class="ai-section">
+      <div class="ai-tools">
+        <button class="edit-btn" onclick="genFollowup(${noteId})">✉ Email de seguimiento</button>
+        <button class="edit-btn" onclick="genActionItems(${noteId})">✓ Pendientes</button>
+      </div>
+      <div id="aiOutput"></div>
+      <div class="ask-eyebrow">Preguntale a esta reunión</div>
+      <div id="askLog" class="ask-log"></div>
+      <div class="ask-row">
+        <input id="askInput" class="ask-input" autocomplete="off"
+               placeholder="Ej: ¿qué quedó pendiente para mí?"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();askNote(${noteId});}" />
+        <button id="askSend" class="ask-send" onclick="askNote(${noteId})">Preguntar</button>
+      </div>
+    </div>` : "";
   document.getElementById("result").innerHTML = `
     ${back}
     ${header}
@@ -999,6 +1053,7 @@ function render(o) {
     ${summaryWarn}
     <div class="card">${mdToHtml(curSummary)}</div>
     ${actions}
+    ${aiSection}
     <details><summary>Ver transcripción completa</summary>
       <div class="transcript">${(o.transcript || "").replace(/</g, "&lt;")}</div>
     </details>`;
@@ -1060,6 +1115,83 @@ function fallbackCopy(text, cb) {
   catch (e) { setStatus("⚠️ No se pudo copiar."); }
   document.body.removeChild(ta);
 }
+
+function copyText(text, msg) {
+  const done = () => setStatus(msg || "✓ Copiado al portapapeles.");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+// ---- Asistente: chat sobre la nota + email de seguimiento + pendientes ----
+function escHtml(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+async function askNote(id) {
+  const input = document.getElementById("askInput");
+  const q = (input.value || "").trim();
+  if (!q) return;
+  const log = document.getElementById("askLog");
+  const send = document.getElementById("askSend");
+  input.value = "";
+  log.insertAdjacentHTML("beforeend", `<div class="ask-msg user">${escHtml(q)}</div>`);
+  const thinking = document.createElement("div");
+  thinking.className = "ask-msg bot thinking";
+  thinking.textContent = "Pensando…";
+  log.appendChild(thinking);
+  log.scrollTop = log.scrollHeight;
+  send.disabled = true; input.disabled = true;
+  try {
+    const r = await fetch(`/api/notes/${id}/ask`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, history: askHistory }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      thinking.classList.remove("thinking");
+      thinking.textContent = "⚠ " + (d.error || "no pude responder");
+    } else {
+      thinking.classList.remove("thinking");
+      thinking.textContent = d.answer || "(sin respuesta)";
+      askHistory.push({ role: "user", content: q });
+      askHistory.push({ role: "assistant", content: d.answer || "" });
+    }
+  } catch (e) {
+    thinking.classList.remove("thinking");
+    thinking.textContent = "⚠ Error de red.";
+  } finally {
+    send.disabled = false; input.disabled = false;
+    log.scrollTop = log.scrollHeight;
+    input.focus();
+  }
+}
+
+async function genAI(id, endpoint, title, copyMsg) {
+  const out = document.getElementById("aiOutput");
+  out.innerHTML = `<div class="ai-card"><div class="ai-card-head"><span class="ai-card-title">${title}</span></div><div class="ai-thinking">Generando…</div></div>`;
+  try {
+    const r = await fetch(`/api/notes/${id}/${endpoint}`, { method: "POST" });
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      out.innerHTML = `<div class="ai-card"><div class="ai-warn">⚠ ${escHtml(d.error || "falló la generación")}</div></div>`;
+      return;
+    }
+    lastAIText = d.text || "";
+    out.innerHTML = `<div class="ai-card">
+        <div class="ai-card-head">
+          <span class="ai-card-title">${title}</span>
+          <button class="edit-btn" onclick="copyText(lastAIText, '${copyMsg}')">⧉ Copiar</button>
+        </div>
+        <div class="ai-body">${escHtml(lastAIText)}</div>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="ai-card"><div class="ai-warn">⚠ Error de red.</div></div>`;
+  }
+}
+
+function genFollowup(id) { genAI(id, "followup", "Email de seguimiento", "✓ Email copiado."); }
+function genActionItems(id) { genAI(id, "action-items", "Pendientes", "✓ Pendientes copiados."); }
 
 async function loadTemplates() {
   const r = await fetch("/api/templates");
