@@ -43,23 +43,6 @@ def find_input_device(name: str):
     return None
 
 
-def record_test(device_name: str, seconds: float = 3.0) -> dict:
-    """Graba unos segundos y devuelve el nivel pico, para verificar el ruteo de audio."""
-    if sd is None:
-        return {"ok": False, "error": _NO_AUDIO_LIB}
-    idx = find_input_device(device_name)
-    if idx is None:
-        return {"ok": False,
-                "error": f"No encontré un dispositivo de entrada que contenga '{device_name}'."}
-    info = sd.query_devices(idx)
-    sr = int(info["default_samplerate"])
-    ch = int(info["max_input_channels"])
-    rec = sd.rec(int(seconds * sr), samplerate=sr, channels=ch, device=idx, dtype="float32")
-    sd.wait()
-    peak = float(np.abs(rec).max()) if rec.size else 0.0
-    return {"ok": True, "peak": peak, "device": info["name"], "samplerate": sr}
-
-
 class ChunkedRecorder:
     def __init__(self, device_name: str = AUDIO_DEVICE_NAME, on_chunk=None,
                  chunk_seconds: int = CHUNK_SECONDS, out_dir: Path = RECORDINGS_DIR):

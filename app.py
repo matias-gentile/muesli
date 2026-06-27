@@ -13,11 +13,6 @@ import threading
 import time
 from pathlib import Path
 
-# sounddevice solo lo necesita el backend BlackHole; opcional para builds solo-SCK.
-try:
-    import sounddevice as sd
-except Exception:  # pragma: no cover
-    sd = None
 from flask import Flask, Response, jsonify, render_template, request, send_file, send_from_directory
 
 import config
@@ -26,7 +21,7 @@ import storage
 import transcribe
 import assistant
 import usage
-from audio_capture import ChunkedRecorder, find_input_device, record_test
+from audio_capture import ChunkedRecorder
 from config import RECORDINGS_DIR
 from screen_capture import ScreenCaptureRecorder
 from session import Session
@@ -92,15 +87,6 @@ def favicon_ico():
     return send_from_directory(_resource("assets"), "favicon.png")
 
 
-@app.route("/api/devices")
-def devices():
-    if sd is None:
-        return jsonify({"configured": config.get("AUDIO_DEVICE_NAME"), "devices": []})
-    out = [{"index": i, "name": d["name"], "channels": d["max_input_channels"]}
-           for i, d in enumerate(sd.query_devices()) if d["max_input_channels"] > 0]
-    return jsonify({"configured": config.get("AUDIO_DEVICE_NAME"), "devices": out})
-
-
 @app.route("/api/templates")
 def templates():
     return jsonify(list_templates())
@@ -137,19 +123,6 @@ def get_usage():
 @app.route("/api/usage/reset", methods=["POST"])
 def reset_usage():
     return jsonify({"ok": usage.reset()})
-
-
-@app.route("/api/test-audio", methods=["POST"])
-def test_audio():
-    if recorder is not None and recorder.recording:
-        return jsonify({"ok": False, "error": "Hay una grabación en curso."}), 400
-    data = request.get_json(silent=True) or {}
-    mode = data.get("mode", "full")
-    device = config.get("AUDIO_DEVICE_OUTPUT_ONLY") if mode == "output" else config.get("AUDIO_DEVICE_NAME")
-    try:
-        return jsonify(record_test(device, seconds=3.0))
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
 
 
 @app.route("/api/start", methods=["POST"])
@@ -267,12 +240,8 @@ def resume():
 
 @app.route("/api/health")
 def health():
-    names = [d["name"].lower() for d in sd.query_devices()] if sd is not None else []
-    dev_name = config.get("AUDIO_DEVICE_NAME")
     return jsonify({
         "backend": config.get("CAPTURE_BACKEND"),
-        "blackhole": any("blackhole" in n for n in names),
-        "device": {"ok": find_input_device(dev_name) is not None, "name": dev_name},
         "api_key": bool(config.get("ANTHROPIC_API_KEY")),
         "notion": notion_sync.is_enabled(),
         "has_notes": len(storage.list_notes()) > 0,
