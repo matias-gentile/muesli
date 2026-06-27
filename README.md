@@ -9,7 +9,7 @@ manuales guían el énfasis. Todo se guarda como Markdown.
 
 ```
 Audio del sistema + micrófono
-   └─ BlackHole (dispositivo agregado) ─→ WAV (local)
+   └─ ScreenCaptureKit (API nativa de macOS) ─→ WAV (local)
         └─ faster-whisper ─→ transcripción (local)
              └─ Claude ─→ resumen por tipo + action items (combinado con tus notas)
                   └─ Markdown en notes/ + índice en SQLite
@@ -38,64 +38,41 @@ que agregar una nueva es trivial.
 
 ## Requisitos previos
 
-- macOS (Apple Silicon o Intel)
+- macOS 13 (Ventura) o posterior — la captura usa ScreenCaptureKit. Para sumar tu
+  **micrófono** conviene macOS 14.4+ (en Apple Silicon anda mejor).
 - Python 3.9+ — comprobá con `python3 --version`
-- Homebrew — https://brew.sh
+- Herramientas de línea de comandos de Xcode (para compilar el helper de captura):
+  `xcode-select --install`
 - Una API key de Anthropic — https://console.anthropic.com
 
 ---
 
-## Paso 1 — Captura de audio (BlackHole)
+## Paso 1 — Captura de audio (ScreenCaptureKit)
 
-macOS no deja grabar el audio del sistema de fábrica. Se resuelve con
-**BlackHole**, un driver de audio virtual gratuito que funciona como un "cable"
-interno por el que pasa el sonido.
+Muesli graba el audio del sistema con **ScreenCaptureKit**, la API nativa de macOS.
+**No hay que instalar BlackHole ni configurar "Audio MIDI Setup"**: macOS captura el
+sonido de las apps directamente y vos seguís escuchando normal, sin rutear nada.
 
-### 1.1 Instalar BlackHole
+### 1.1 Compilar el helper de captura (una sola vez)
+La captura la hace un pequeño helper en Swift que se compila localmente:
 ```bash
-brew install blackhole-2ch
+cd native && ./build.sh && cd ..
 ```
-Te va a pedir tu contraseña (instala un componente de sistema). Si `brew` falla o
-no lo usás, descargá el `.pkg` de **BlackHole2ch** directo desde GitHub releases
-(sin tener que dar tu email): https://github.com/ExistentialAudio/BlackHole/releases
-
-**Importante:** después de instalar, **reiniciá el Mac**. macOS carga el driver de
-audio recién al reiniciar, y es la causa #1 de que "BlackHole no aparezca" en
-Configuración de Audio MIDI. Si no querés reiniciar, podés refrescar el servicio
-de audio con:
+Necesitás las **Herramientas de línea de comandos de Xcode**. Si no las tenés:
 ```bash
-sudo killall coreaudiod
+xcode-select --install
 ```
-Si al instalar saltó un aviso de *"software del sistema bloqueado"*, andá a
-*Ajustes del Sistema → Privacidad y seguridad*, dale **Permitir** y reiniciá.
+> La app empaquetada (`.app`) ya viene con el helper compilado adentro, así que este
+> paso es solo para correr desde el código fuente.
 
-### 1.2 Abrir "Configuración de Audio MIDI"
-Spotlight (⌘+Espacio) → escribí **Configuración de Audio MIDI** (Audio MIDI Setup).
+### 1.2 Tu voz (micrófono)
+En el grabador hay un toggle **Salida + micrófono**:
+- **Activado:** mezcla tu micrófono con el audio del sistema — ideal para
+  videollamadas donde querés que quede registrado también lo que decís vos.
+- **Desactivado:** graba solo el audio del sistema (lo que suena en la Mac).
 
-### 1.3 Crear un *Multi-Output Device* (para seguir escuchando)
-Si mandás todo el audio a BlackHole, dejarías de oírlo. Este dispositivo lo manda
-a la vez a BlackHole y a tus parlantes.
-1. Botón `+` (abajo a la izquierda) → **Crear dispositivo de salida múltiple**.
-2. Marcá **BlackHole 2ch** y tu salida normal (*MacBook Speakers* o tus auriculares).
-3. (Opcional) Renombralo, p. ej. "Muesli salida".
-
-### 1.4 Crear un *Aggregate Device* (lo que graba la app)
-Combina lo que entra por BlackHole (el audio de la reunión) con tu micrófono (tu voz).
-1. Botón `+` → **Crear dispositivo agregado**.
-2. Marcá **BlackHole 2ch** y tu **micrófono** (*MacBook Microphone*).
-3. Renombralo de forma que el nombre contenga `Aggregate` (o ajustá
-   `AUDIO_DEVICE_NAME` en `.env` para que coincida con el nombre que le pongas).
-
-### 1.5 Antes de cada grabación
-- Poné la **salida** del sistema en el *Multi-Output Device* (menú de volumen, o
-  Ajustes del Sistema → Sonido → Salida).
-- La app graba sola desde el *Aggregate Device*; no tenés que tocar la entrada.
-
-> Para ver qué dispositivos detecta Python:
-> ```bash
-> python audio_capture.py
-> ```
-> Debe aparecer tu dispositivo agregado en la lista.
+Los permisos de macOS (Grabación de pantalla y, si corresponde, Micrófono) se
+piden automáticamente la primera vez que grabás — ver el Paso 3.
 
 ---
 
@@ -123,9 +100,11 @@ python app.py
 ```
 Abrí **http://localhost:5001**.
 
-La primera vez que grabes, macOS pedirá permiso de micrófono. Concedelo en
-*Ajustes del Sistema → Privacidad y seguridad → Micrófono* (para tu terminal o
-para Python). Si lo negaste, activalo ahí y reiniciá la app.
+La primera vez que grabes, macOS va a pedir permiso de **Grabación de pantalla**
+(es lo que habilita capturar el audio del sistema con ScreenCaptureKit) y, si usás
+el modo "Salida + micrófono", también de **Micrófono**. Concedelos en *Ajustes del
+Sistema → Privacidad y seguridad → Grabación de pantalla* (y → *Micrófono*),
+activando tu terminal o la app. Después de darlos puede que tengas que reiniciar la app.
 
 ---
 
@@ -157,8 +136,8 @@ para Python). Si lo negaste, activalo ahí y reiniciá la app.
 <kbd>Esc</kbd> cierra Configuración. (El espacio no interfiere cuando estás escribiendo en
 un campo.)
 
-**Primer uso:** si falta algo del setup (BlackHole, dispositivo de audio o API key),
-arriba aparece un **checklist de bienvenida** que te dice exactamente qué configurar. El
+**Primer uso:** si falta la **API key de Claude** (lo único imprescindible), arriba
+aparece un **checklist de bienvenida** que te dice exactamente qué configurar. El
 mismo estado lo tenés siempre dentro de **⚙ Configuración**. La primera vez también se abre
 un **tutorial guiado**; podés volver a verlo cuando quieras con **❓ Cómo usar Muesli** (abajo
 a la izquierda).
@@ -224,20 +203,18 @@ Vas a ver un 🎙️ en la barra de menú. Desde ahí:
   nota). Pide confirmación.
 - **Estado en vivo**: "Transcribiendo 3/12…", "Resumiendo con Claude…", y una
   **notificación nativa** cuando el resumen está listo.
-- **Fuente de audio**: elegís "Salida + micrófono" o "Solo salida del sistema".
+- **Salida + micrófono**: un toggle para incluir (o no) tu micrófono además del
+  audio del sistema.
 - **🔊 Salida de audio**: cambiá el dispositivo de salida del sistema (bocinas, AirPods,
-  etc.) con un clic, sin ir a Ajustes. Las opciones con un **🟢** son las que incluyen
-  BlackHole — o sea, **mantienen la captura de Muesli** mientras escuchás. La salida
-  actual queda tildada. (Si acabás de conectar/desconectar AirPods, "↻ Actualizar lista".)
+  etc.) con un clic, sin ir a Ajustes. La salida actual queda tildada. (Si acabás de
+  conectar/desconectar AirPods, "↻ Actualizar lista".)
 - **Abrir panel**: abre la interfaz completa (historial, notas, tipo de reunión,
   resúmenes) en una **ventana nativa** — la misma UI, pero sin navegador.
 
-> **Tip — alternar entre AirPods y bocinas sin perder la captura:** creá en *Configuración
-> de Audio MIDI* **dos** dispositivos de *Salida Múltiple*, cada uno con BlackHole + un
-> parlante (p. ej. "Muesli — Bocinas" y "Muesli — AirPods"; activá *Corrección de deriva*
-> en los AirPods). Como ambos pasan por BlackHole, los ves con 🟢 en el menú y podés saltar
-> de uno a otro mientras grabás. (Ojo: con una Salida Múltiple activa, las teclas de
-> volumen del teclado no funcionan; subí/bajá volumen desde la app que reproduce.)
+> **Con ScreenCaptureKit podés cambiar de salida (bocinas ↔ AirPods) en cualquier
+> momento sin afectar la grabación:** la captura del audio del sistema es independiente
+> del dispositivo de salida. (Antes, con BlackHole, había que rutear todo por "Audio MIDI
+> Setup"; ahora ya no hace falta nada de eso.)
 
 La barra de menú y el panel comparten el mismo estado: si arrancás a grabar en uno,
 el otro lo refleja. Para una captura rápida alcanza con la barra (usa un nombre por
@@ -390,26 +367,25 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 
 ## Configuración (`.env`)
 
-> ### Fuente de captura: BlackHole o ScreenCaptureKit
-> En **⚙ Configuración → Fuente de captura** elegís cómo se graba el audio:
-> - **BlackHole** (por defecto): sistema **+ micrófono**, vía el driver virtual y los
->   dispositivos de Audio MIDI (lo de siempre).
-> - **ScreenCaptureKit**: graba el **audio del sistema sin BlackHole ni Audio MIDI**
->   (macOS 13+). En **macOS 15+** además puede sumar tu **micrófono** (el toggle
->   "Salida + micrófono / Solo salida" del grabador lo controla; la mezcla la hace
->   Muesli). Pide permiso de **Grabación de pantalla** (y de **Micrófono** si sumás el
->   mic). Todavía **no permite pausar**. Requiere compilar el helper una vez:
->   `cd native && ./build.sh` (ver [`native/README.md`](native/README.md)).
+> ### Captura de audio: ScreenCaptureKit
+> Muesli graba con **ScreenCaptureKit**, la API nativa de macOS: **audio del sistema sin
+> BlackHole ni "Audio MIDI Setup"** (macOS 13+). En **macOS 14.4+** además puede sumar tu
+> **micrófono** (el toggle "Salida + micrófono" del grabador lo controla; la mezcla la hace
+> Muesli). Pide permiso de **Grabación de pantalla** (y de **Micrófono** si sumás el mic).
+> Todavía **no permite pausar**. Para correr desde el código fuente hay que compilar el
+> helper una vez: `cd native && ./build.sh` (ver [`native/README.md`](native/README.md)); la
+> `.app` empaquetada ya lo trae compilado.
 >
-> Útil para reuniones donde te alcanza con el audio de los demás (Zoom/Meet) y no querés
-> pelearte con Audio MIDI. Si necesitás tu micrófono, usá BlackHole.
+> (Existe un backend `blackhole` heredado, pero quedó fuera de la interfaz; ver la tabla de
+> variables más abajo si sos power user.)
 
-> Desde la app también podés configurar casi todo sin tocar archivos: botón
-> **⚙ Configuración** (barra lateral). Permite elegir el **dispositivo de audio**
-> (con un botón **▶ Probar** que graba 3 s y te dice si entra señal), el **modelo de
-> Claude** y de **Whisper**, la duración de segmento y las credenciales de **Notion**.
-> Los cambios se aplican en vivo (sin reiniciar) y se guardan en `settings.json`.
-> El `.env` sigue funcionando como valores por defecto.
+> Desde la app podés configurar casi todo sin tocar archivos: botón
+> **⚙ Configuración** (barra lateral). Permite elegir el **modelo de Claude**
+> (desplegable con costos) y de **Whisper**, la duración de segmento, el
+> **auto-detenido por silencio**, el **auto-borrado del audio**, un **presupuesto
+> mensual** de la API y las credenciales de **Notion**. Los cambios se aplican en vivo
+> (sin reiniciar) y se guardan en `settings.json`. El `.env` sigue funcionando como
+> valores por defecto.
 >
 > En **⚙ Configuración → Almacenamiento** ves cuánto ocupan las grabaciones y podés
 > **liberar el audio ya procesado** (borra los `.wav` de las reuniones que ya tienen
@@ -422,13 +398,12 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 | `CLAUDE_MODEL` | `claude-sonnet-4-6` (recomendado), `claude-opus-4-8` (+calidad), `claude-haiku-4-5-20251001` (+barato) |
 | `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` (más grande = más preciso y lento) |
 | `WHISPER_VAD` | `0` (off, más permisivo con audio bajo) o `1` (descarta silencios) |
-| `AUDIO_DEVICE_NAME` | Substring del nombre de tu dispositivo agregado |
-| `AUDIO_DEVICE_OUTPUT_ONLY` | Dispositivo para el modo "solo salida" (por defecto `BlackHole`) |
-| `CAPTURE_BACKEND` | `blackhole` (por defecto) o `screencapturekit` (audio del sistema sin Audio MIDI) |
+| `CAPTURE_BACKEND` | `screencapturekit` (por defecto, sin Audio MIDI). `blackhole` es un backend heredado que no aparece en la interfaz y requiere libs de audio + Audio MIDI |
 | `CHUNK_SECONDS` | Duración de cada segmento de grabación (por defecto `600` = 10 min) |
-| `AUTO_STOP_SILENCE_MIN` | Minutos de silencio seguidos antes de cortar sola (`0` = desactivado; por defecto `15`) |
+| `AUTO_STOP_SILENCE_MIN` | Silencio seguido antes de cortar sola, en minutos (admite decimales: `0.5` = 30 s; `0` = desactivado; por defecto `15`) |
 | `MAX_RECORDING_MIN` | Tope duro de duración en minutos (`0` = desactivado; por defecto `180` = 3 h) |
 | `AUTO_PURGE_AUDIO` | Borrar el `.wav` automáticamente al terminar de transcribir (`1` = sí, `0` = no; por defecto `0`) |
+| `MONTHLY_BUDGET_USD` | Presupuesto mensual estimado para la API (USD); `0` = sin límite. Muesli muestra el gasto estimado y una barra de progreso |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
 | `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
 
@@ -465,33 +440,26 @@ directo a la página creada.
 
 ## Solución de problemas
 
-**BlackHole no aparece en Configuración de Audio MIDI**
-Casi siempre es porque falta reiniciar después de instalarlo (macOS carga el
-driver al reiniciar) o porque no llegó a instalarse. Verificá con
-`brew list | grep blackhole`; si no devuelve nada, instalalo (Paso 1.1). Después
-**reiniciá el Mac** o corré `sudo killall coreaudiod`. Si hubo un aviso de
-software bloqueado, permitilo en *Ajustes del Sistema → Privacidad y seguridad*.
-Ojo: *ZoomAudioDevice* no es BlackHole; es el driver de Zoom y no sirve como
-loopback general.
+**No graba el audio del sistema / la grabación sale en silencio**
+Lo más común es que falte el permiso de **Grabación de pantalla** — es lo que habilita
+capturar el audio del sistema con ScreenCaptureKit. Activá tu terminal (o la app) en
+*Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla* y reiniciá la app.
+Para confirmar, reproducí el último `.wav` en `recordings/`: si no suena, es eso. Muesli
+detecta nivel ≈ 0 y te avisa en vez de resumir el vacío.
 
-**"No encontré un dispositivo de entrada que contenga 'Aggregate'"**
-Corré `python audio_capture.py` para ver los nombres reales y poné el substring
-correcto en `AUDIO_DEVICE_NAME`. Confirmá que creaste el Aggregate Device.
-
-**Graba, pero el resumen solo tiene tu voz (no lo que dijeron los demás)**
-La salida del sistema no está yendo a BlackHole. Poné la salida en el
-*Multi-Output Device* antes de grabar.
+**Error al iniciar la captura / "no encuentra el helper"**
+Si corrés desde el código fuente, compilá el helper de captura una vez:
+`cd native && ./build.sh`. Necesitás las Herramientas de línea de comandos de Xcode
+(`xcode-select --install`). La `.app` empaquetada ya lo trae compilado.
 
 **El resumen dice "no hay contenido" / sale vacío**
-La grabación quedó en silencio. Casi siempre es porque la **salida del sistema no
-está en el Multi-Output Device** (entonces BlackHole no captó nada). Ponela ahí y
-volvé a probar. Para confirmar, reproducí el último `.wav` en `recordings/`: si no
-suena, es eso. Muesli ahora detecta nivel ≈ 0 y te avisa en vez de resumir el vacío.
-Si el audio existe pero estaba muy bajo, además podés dejar `WHISPER_VAD=0`.
+La grabación quedó en silencio (revisá el permiso de Grabación de pantalla, arriba). Si el
+audio existe pero estaba muy bajo, podés dejar `WHISPER_VAD=0` para que Whisper sea más
+permisivo.
 
-**No se oye nada durante la reunión**
-Estás mandando la salida solo a BlackHole. Cambiá la salida al *Multi-Output
-Device* (que incluye tus parlantes).
+**El resumen no incluye tu voz**
+Activá el toggle **Salida + micrófono** en el grabador y concedé el permiso de Micrófono.
+(Sumar el micrófono vía ScreenCaptureKit necesita macOS 14.4+.)
 
 **Permiso de micrófono denegado**
 Ajustes del Sistema → Privacidad y seguridad → Micrófono → activá tu

@@ -490,6 +490,8 @@
   .tone-chip{font-family:inherit; font-size:12.5px; padding:5px 13px; border-radius:999px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); cursor:pointer; transition:border-color .12s ease, color .12s ease, background .12s ease;}
   .tone-chip:hover{border-color:var(--accent); color:var(--text);}
   .tone-chip.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:650;}
+  .followup-controls{display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin-bottom:2px;}
+  .followup-controls .tone-chips{margin-bottom:0;}
   .ai-card{
     background:var(--surface-2); border:1px solid var(--border); border-radius:14px;
     padding:15px 17px; margin-bottom:14px;
@@ -1122,7 +1124,7 @@ function render(o) {
   const aiSection = noteId ? `
     <div class="ai-section">
       <div class="ai-tools">
-        <button class="edit-btn" onclick="genFollowup(${noteId})">✉ Email de seguimiento</button>
+        <button class="edit-btn" onclick="openFollowup(${noteId})">✉ Email de seguimiento</button>
         <button class="edit-btn" onclick="genActionItems(${noteId})">✓ Pendientes</button>
         <button class="edit-btn" onclick="genDialogue(${noteId})">💬 Diálogo</button>
       </div>
@@ -1410,46 +1412,64 @@ function lastTone() {
   try { return localStorage.getItem("muesli-followup-tone") || "cordial"; } catch (e) { return "cordial"; }
 }
 
-function toneChips(id, active) {
-  return `<div class="tone-chips">` + FOLLOWUP_TONES.map(t =>
-    `<button class="tone-chip ${t.key === active ? "on" : ""}" onclick="genFollowup(${id}, '${t.key}')">${t.label}</button>`
-  ).join("") + `</div>`;
+// Estado del panel de seguimiento. Elegir tono NO genera; solo el botón genera (gasta tokens).
+let followupState = { id: null, tone: "cordial", text: null, loading: false, error: null };
+
+function openFollowup(id) {
+  followupState = { id, tone: lastTone(), text: null, loading: false, error: null };
+  renderFollowupPanel();
 }
 
-async function genFollowup(id, style) {
-  style = style || lastTone();
-  try { localStorage.setItem("muesli-followup-tone", style); } catch (e) {}
-  const label = (FOLLOWUP_TONES.find(t => t.key === style) || {}).label || "";
-  const out = document.getElementById("aiOutput");
-  out.innerHTML = `<div class="ai-card">
-      <div class="ai-card-head"><span class="ai-card-title">Seguimiento</span></div>
-      ${toneChips(id, style)}
-      <div class="ai-thinking">Redactando en tono ${label.toLowerCase()}…</div>
-    </div>`;
+function selectTone(key) {
+  if (followupState.loading) return;
+  followupState.tone = key;   // solo cambia la selección, no dispara nada
+  renderFollowupPanel();
+}
+
+async function runFollowup() {
+  if (followupState.loading) return;
+  const { id, tone } = followupState;
+  try { localStorage.setItem("muesli-followup-tone", tone); } catch (e) {}
+  followupState.loading = true; followupState.error = null;
+  renderFollowupPanel();
   try {
     const r = await fetch(`/api/notes/${id}/followup`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ style }),
+      body: JSON.stringify({ style: tone }),
     });
     const d = await r.json();
-    if (!r.ok || d.error) {
-      out.innerHTML = `<div class="ai-card">${toneChips(id, style)}<div class="ai-warn">⚠ ${escHtml(d.error || "no pude redactar el seguimiento")}</div></div>`;
-      return;
-    }
-    lastAIText = d.text || "";
-    out.innerHTML = `<div class="ai-card">
-        <div class="ai-card-head">
-          <span class="ai-card-title">Seguimiento</span>
-          <button class="edit-btn" onclick="copyText(lastAIText, '✓ Copiado.')">⧉ Copiar</button>
-        </div>
-        ${toneChips(id, style)}
-        <div class="enh-hint" style="margin:-4px 0 10px">Tocá un tono para reescribirlo.</div>
-        <div class="ai-body">${escHtml(lastAIText)}</div>
-      </div>`;
+    followupState.loading = false;
+    if (!r.ok || d.error) { followupState.error = d.error || "no pude redactar el seguimiento"; renderFollowupPanel(); return; }
+    followupState.text = d.text || "";
+    lastAIText = followupState.text;
+    renderFollowupPanel();
     updateSpendPill();
   } catch (e) {
-    out.innerHTML = `<div class="ai-card"><div class="ai-warn">⚠ Error de red.</div></div>`;
+    followupState.loading = false; followupState.error = "Error de red."; renderFollowupPanel();
   }
+}
+
+function renderFollowupPanel() {
+  const out = document.getElementById("aiOutput");
+  if (!out) return;
+  const { tone, text, loading, error } = followupState;
+  const label = ((FOLLOWUP_TONES.find(t => t.key === tone) || {}).label || "").toLowerCase();
+  const chips = `<div class="tone-chips">` + FOLLOWUP_TONES.map(t =>
+    `<button class="tone-chip ${t.key === tone ? "on" : ""}" ${loading ? "disabled" : ""} onclick="selectTone('${t.key}')">${t.label}</button>`
+  ).join("") + `</div>`;
+  const btnLabel = loading ? "Generando…" : (text ? `↻ Reescribir en ${label}` : `✉ Generar (${label})`);
+  const genBtn = `<button class="regen-btn" ${loading ? "disabled" : ""} onclick="runFollowup()">${btnLabel}</button>`;
+  let body;
+  if (error) body = `<div class="ai-warn" style="margin-top:11px">⚠ ${escHtml(error)}</div>`;
+  else if (loading) body = `<div class="ai-thinking">Redactando en tono ${label}…</div>`;
+  else if (text != null) body = `<div class="ai-body" style="margin-top:11px">${escHtml(text)}</div>`;
+  else body = `<div class="enh-hint" style="margin-top:6px">Elegí un tono y tocá generar. Cada generación consume tokens de la API.</div>`;
+  const copyBtn = (text != null && !loading) ? `<button class="edit-btn" onclick="copyText(lastAIText, '✓ Copiado.')">⧉ Copiar</button>` : "";
+  out.innerHTML = `<div class="ai-card">
+      <div class="ai-card-head"><span class="ai-card-title">Seguimiento</span>${copyBtn}</div>
+      <div class="followup-controls">${chips}${genBtn}</div>
+      ${body}
+    </div>`;
 }
 function genActionItems(id) { genAI(id, "action-items", "Pendientes", "✓ Pendientes copiados."); }
 
