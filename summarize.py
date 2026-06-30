@@ -157,20 +157,40 @@ def type_label(context_type):
     return TEMPLATES.get(context_type, TEMPLATES[DEFAULT_TYPE])["label"]
 
 
-def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, context=""):
+def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, context="",
+              detail="normal", model=None):
     template = TEMPLATES.get(context_type, TEMPLATES[DEFAULT_TYPE])
 
     words = len(transcript.split())
     # Presupuesto de salida proporcional a la longitud: cuanto más larga la
     # reunión, más detallado puede ser el resumen (sin un tope fijo que lo recorte).
     max_tokens = min(8000, max(1500, int(words * 0.35)))
+    if detail == "corto":
+        max_tokens = min(max_tokens, 1200)
+    elif detail == "extenso":
+        max_tokens = min(8000, max(4000, int(words * 0.6)))
 
     system = (
         BASE_SYSTEM
         + f"\n\n=== PLANTILLA A USAR (tipo: {template['label']}) ===\n"
         + template["structure"]
     )
-    if words > 3500:  # reunión larga (~25+ min): pedir un resumen exhaustivo
+    if detail == "corto":
+        system += (
+            "\n\n=== NIVEL DE DETALLE: BREVE ===\n"
+            "Hacé un resumen CONCISO: solo lo esencial, las decisiones y los pendientes "
+            "principales, en la menor cantidad de texto posible. Evitá el detalle fino."
+        )
+    elif detail == "extenso":
+        system += (
+            "\n\n=== NIVEL DE DETALLE: EXTENSO ===\n"
+            "Hacé un resumen MUY DETALLADO y exhaustivo, aprovechando todo el contexto. En "
+            "'Puntos clave' recorré los temas uno por uno con la sustancia de cada discusión "
+            "(qué se planteó, qué posturas hubo, los datos y números mencionados, en qué se "
+            "quedó), no solo títulos. Incluí matices y ejemplos concretos. Es preferible un "
+            "resumen largo y completo a uno breve que se pierda cosas."
+        )
+    elif words > 3500:  # 'normal' pero reunión larga (~25+ min): pedir exhaustividad igual
         system += (
             f"\n\n=== REUNIÓN LARGA (~{words} palabras) ===\n"
             "Hacé un resumen DETALLADO y exhaustivo. En 'Puntos clave' recorré los temas "
@@ -191,7 +211,7 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     client = Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
                        max_retries=4, timeout=180)  # reintenta cortes de red transitorios
     messages = [{"role": "user", "content": user_content}]
-    model = config.get("CLAUDE_MODEL")
+    model = model or config.get("CLAUDE_MODEL")  # permite override por llamada
     full = ""
     for _ in range(5):  # si la respuesta se corta por longitud, la continúa
         message = client.messages.create(

@@ -476,6 +476,12 @@
   .ai-spark{color:var(--accent); font-size:0.78em; margin-left:5px; opacity:.85; vertical-align:1px;}
   .ai-legend{font-size:11.5px; color:var(--text-faint); margin:-7px 0 14px; display:flex; align-items:center;}
   .ai-legend .ai-spark{margin-left:0; margin-right:5px; vertical-align:0;}
+  /* Panel de regenerar resumen (detalle + modelo) */
+  .regen-card{background:var(--surface-2); border:1px solid var(--border); border-radius:13px; padding:14px; margin:-6px 0 16px;}
+  .regen-row{display:flex; align-items:center; gap:10px; margin-bottom:9px; flex-wrap:wrap;}
+  .regen-lbl{font-size:12px; color:var(--text-faint); min-width:52px; font-weight:600;}
+  .regen-actions{display:flex; gap:8px; margin-top:4px;}
+  .regen-card .tone-chips{margin-bottom:0;}
   /* Panel de gasto estimado */
   .usage-box{margin-top:4px; font-size:13.5px; color:var(--text-dim); line-height:1.55;}
   .usage-cost{font-family:var(--font-display); font-size:26px; font-weight:600; color:var(--text); line-height:1.1;}
@@ -1121,7 +1127,7 @@ function render(o) {
         <button class="edit-btn" onclick="copySummary()">⧉ Copiar</button>
         <a class="edit-btn" href="/api/notes/${noteId}/download" download>⤓ .md</a>
         <button class="edit-btn" onclick="editSummary(${noteId})">✎ Editar</button>
-        <button class="regen-btn" onclick="resummarize(${noteId})" title="Usa Claude · consume tokens">↻ Regenerar<span class="ai-spark">✦</span></button>
+        <button class="regen-btn" onclick="openRegen(${noteId})" title="Regenerar con otro detalle/modelo">↻ Regenerar<span class="ai-spark">✦</span></button>
         ${purgeBtn}
       </div>` : "";
   const back = noteId ? `<button class="back-link" onclick="newRecording()">← Volver</button>` : "";
@@ -1175,6 +1181,7 @@ function render(o) {
     ${momentsSection}
     ${enhSection}
     ${actions}
+    <div id="regenPanel"></div>
     ${aiSection}
     <details><summary>Ver transcripción completa</summary>
       <div class="transcript">${(o.transcript || "").replace(/</g, "&lt;")}</div>
@@ -1613,21 +1620,92 @@ async function openNote(id) {
   await loadList();
 }
 
-async function resummarize(id) {
-  setStatus("Regenerando resumen con Claude…", true);
+const REGEN_DETAILS = [
+  { key: "corto", label: "Corto" },
+  { key: "normal", label: "Normal" },
+  { key: "extenso", label: "Extenso" },
+];
+const REGEN_MODELS = [
+  { key: "claude-haiku-4-5", label: "Haiku", hint: "más barato y rápido" },
+  { key: "claude-sonnet-4-6", label: "Sonnet", hint: "equilibrado" },
+  { key: "claude-opus-4-8", label: "Opus", hint: "el más capaz y caro" },
+];
+let regenState = { id: null, detail: "normal", model: "", configModel: "", loading: false, error: null };
+
+function regenModelList(configModel) {
+  const base = REGEN_MODELS.slice();
+  if (configModel && !base.some(m => m.key === configModel)) {
+    base.unshift({ key: configModel, label: "Tu modelo", hint: "el configurado en Ajustes" });
+  }
+  return base;
+}
+
+async function openRegen(id) {
+  let configModel = "claude-sonnet-4-6";
+  try { configModel = (await (await fetch("/api/settings")).json()).CLAUDE_MODEL || configModel; } catch (e) {}
+  let detail = "normal", model = "";
+  try { detail = localStorage.getItem("muesli-regen-detail") || "normal"; } catch (e) {}
+  try { model = localStorage.getItem("muesli-regen-model") || ""; } catch (e) {}
+  regenState = { id, detail, model: model || configModel, configModel, loading: false, error: null };
+  renderRegen();
+}
+
+function closeRegen() {
+  regenState.id = null;
+  const el = document.getElementById("regenPanel");
+  if (el) el.innerHTML = "";
+}
+
+function regenSet(field, val) {
+  if (regenState.loading) return;
+  regenState[field] = val;
+  renderRegen();
+}
+
+async function runRegen() {
+  if (regenState.loading) return;
+  const { id, detail, model } = regenState;
+  try { localStorage.setItem("muesli-regen-detail", detail); localStorage.setItem("muesli-regen-model", model); } catch (e) {}
+  regenState.loading = true; regenState.error = null;
+  renderRegen();
   try {
     const r = await fetch(`/api/notes/${id}/resummarize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ context_type: document.getElementById("ctype").value }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ detail, model }),
     });
     const d = await r.json();
-    if (d.error) { setStatus("⚠️ " + d.error); return; }
+    regenState.loading = false;
+    if (!r.ok || d.error) { regenState.error = d.error || "no se pudo regenerar"; renderRegen(); return; }
+    curSummary = d.summary || curSummary;
+    const card = document.querySelector("#result .card");
+    if (card) card.innerHTML = mdToHtml(curSummary);
+    closeRegen();
+    updateSpendPill();
     setStatus("✓ Resumen regenerado.");
-    await openNote(id);
   } catch (e) {
-    setStatus("⚠️ Error de conexión al regenerar.");
+    regenState.loading = false; regenState.error = "Error de red."; renderRegen();
   }
+}
+
+function renderRegen() {
+  const el = document.getElementById("regenPanel");
+  if (!el || !regenState.id) return;
+  const { detail, model, configModel, loading, error } = regenState;
+  const dchips = REGEN_DETAILS.map(d =>
+    `<button class="tone-chip ${d.key === detail ? "on" : ""}" ${loading ? "disabled" : ""} onclick="regenSet('detail','${d.key}')">${d.label}</button>`).join("");
+  const mchips = regenModelList(configModel).map(m =>
+    `<button class="tone-chip ${m.key === model ? "on" : ""}" ${loading ? "disabled" : ""} onclick="regenSet('model','${m.key}')" title="${m.hint}${m.key === configModel ? " · tu modelo por defecto" : ""}">${m.label}</button>`).join("");
+  const btn = loading
+    ? `<button class="regen-btn" disabled>Regenerando…</button>`
+    : `<button class="regen-btn" onclick="runRegen()" title="Usa Claude · consume tokens">↻ Regenerar<span class="ai-spark">✦</span></button>`;
+  const err = error ? `<div class="ai-warn" style="margin-top:9px">⚠ ${escHtml(error)}</div>` : "";
+  el.innerHTML = `<div class="regen-card">
+      <div class="regen-row"><span class="regen-lbl">Detalle</span><div class="tone-chips">${dchips}</div></div>
+      <div class="regen-row"><span class="regen-lbl">Modelo</span><div class="tone-chips">${mchips}</div></div>
+      <div class="regen-actions">${btn}<button class="edit-btn" ${loading ? "disabled" : ""} onclick="closeRegen()">Cancelar</button></div>
+      ${err}
+      <div class="enh-hint" style="margin-top:9px">"Extenso" da un resumen más largo (usa más tokens); "Opus" es el más capaz y caro. El modelo por defecto sale de ⚙ Configuración.</div>
+    </div>`;
 }
 
 async function deleteNote(event, id) {

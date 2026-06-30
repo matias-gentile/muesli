@@ -294,9 +294,18 @@ def resummarize(note_id):
         return jsonify({"error": "Esta nota no tiene transcripción para resumir."}), 400
 
     data = request.get_json(silent=True) or {}
-    ctype = data.get("context_type", "reunion")
+    ctype = data.get("context_type") or n.get("ctype") or "reunion"
+    detail = data.get("detail", "normal")
+    if detail not in ("corto", "normal", "extenso"):
+        detail = "normal"
+    # Modelo: aceptamos solo conocidos o el configurado; cualquier otra cosa cae al default.
+    model = data.get("model") or None
+    allowed = {"claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8", config.get("CLAUDE_MODEL")}
+    if model and model not in allowed:
+        model = None
     try:
-        summary = summarize(transcript, n.get("manual_notes", ""), n.get("title", ""), ctype, "")
+        summary = summarize(transcript, n.get("manual_notes", ""), n.get("title", ""), ctype, "",
+                            detail=detail, model=model)
     except Exception as e:  # error de red/API: lo devolvemos para reintentar
         return jsonify({"error": f"No se pudo generar el resumen: {e}"}), 502
 

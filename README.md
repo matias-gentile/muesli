@@ -350,8 +350,10 @@ El resumen es el único paso que usa internet (la llamada a la API de Claude). S
 justo ahí se corta la conexión, **no perdés la grabación**:
 
 - La **transcripción se guarda igual**, con un aviso de que el resumen falló. En el
-  panel, abrí la nota y tocá **"↻ Regenerar resumen"** para reintentar (también sirve
-  si querés un resumen distinto). La llamada ahora reintenta sola ante cortes breves.
+  panel, abrí la nota y tocá **"↻ Regenerar"** para reintentar. Al regenerar podés elegir
+  el **nivel de detalle** (corto / normal / **extenso**, para charlas largas que ameritan un
+  resumen más completo) y el **modelo** (Haiku / Sonnet / Opus) solo para esa regeneración.
+  La llamada reintenta sola ante cortes breves.
 - Si la nota no llegó a guardarse (versión vieja, o cerraste la app), el audio sigue
   en `recordings/meeting-<fecha>/`. En el panel, esas grabaciones aparecen abajo en
   **"Sin procesar"** con un botón **"Recuperar"**, que las re-transcribe y resume sin
