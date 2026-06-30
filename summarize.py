@@ -7,6 +7,8 @@ estructurado en Markdown, adaptado al contexto. Es el equivalente a las
 """
 from anthropic import Anthropic
 
+import datetime as _dt
+
 import config
 import usage
 
@@ -230,6 +232,83 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
         messages.append({"role": "user",
                          "content": "Seguí el resumen exactamente desde donde se cortó, sin "
                                     "repetir lo ya escrito ni reabrir secciones ya cerradas."})
+    return full.strip()
+
+
+_WEEKLY_SYSTEM = """Sos un asistente que sintetiza la semana de trabajo de una persona \
+a partir de los resúmenes de sus reuniones. Te paso varios resúmenes (ya condensados) de \
+las reuniones de los últimos 7 días, en orden cronológico. Producí UN resumen semanal en \
+español, claro y accionable, en Markdown, con esta estructura exacta:
+
+## Panorama de la semana
+Un párrafo breve (TL;DR): qué pasó en general, el hilo conductor de la semana.
+
+## Temas recurrentes
+Los temas que aparecieron en más de una reunión o que dominaron la semana, agrupados. Si \
+algo se mencionó en varias reuniones, decilo explícitamente.
+
+## Decisiones
+Las decisiones concretas que se tomaron durante la semana (un bullet por decisión).
+
+## Pendientes consolidados
+Todos los próximos pasos y tareas pendientes que surgieron, juntados en una sola lista. \
+Para cada uno indicá entre paréntesis de qué reunión salió, y el responsable si se sabe.
+
+## Reunión por reunión
+Una línea por reunión: el título y, en una frase, lo más importante de esa reunión.
+
+Reglas:
+- Basate SOLO en los resúmenes que te paso; no inventes nada que no esté.
+- Si una sección no aplica (p. ej. no hubo decisiones), poné "—".
+- Sé conciso pero no omitas lo importante: es un digest para retomar la semana de un vistazo."""
+
+
+def weekly_digest(notes, detail="normal", model=None):
+    """Resumen semanal por map-reduce desde los resúmenes ya guardados de cada nota.
+    `notes`: lista de dicts con title, created_at, ctype, summary (orden cronológico asc)."""
+    blocks, total, cap = [], 0, 60000
+    for n in notes:
+        try:
+            fecha = _dt.datetime.fromisoformat(n.get("created_at", "")).strftime("%d/%m")
+        except Exception:
+            fecha = (n.get("created_at") or "")[:10]
+        label = type_label(n.get("ctype") or DEFAULT_TYPE)
+        summary = (n.get("summary") or "").strip() or "(sin resumen)"
+        block = f"### {fecha} · {n.get('title') or 'Sin título'} ({label})\n{summary}"
+        if total + len(block) > cap:
+            blocks.append("… (se omitieron reuniones por longitud) …")
+            break
+        blocks.append(block)
+        total += len(block)
+    user_content = (f"Estos son los resúmenes de las reuniones de los últimos 7 días "
+                    f"({len(notes)} en total), en orden cronológico:\n\n" + "\n\n".join(blocks))
+
+    # El semanal es síntesis: el detalle ajusta cuánto desarrolla cada sección.
+    system, max_tokens = _WEEKLY_SYSTEM, 2000
+    if detail == "corto":
+        max_tokens = 1000
+        system += "\n\nNIVEL DE DETALLE: BREVE. Hacé el digest lo más conciso posible."
+    elif detail == "extenso":
+        max_tokens = 4000
+        system += ("\n\nNIVEL DE DETALLE: EXTENSO. Desarrollá cada sección con más profundidad "
+                   "y matices, sin perder la estructura.")
+
+    client = Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
+                       max_retries=4, timeout=180)
+    messages = [{"role": "user", "content": user_content}]
+    model = model or config.get("CLAUDE_MODEL")
+    full = ""
+    for _ in range(5):  # continúa si se corta por longitud
+        message = client.messages.create(
+            model=model, max_tokens=max_tokens, system=system, messages=messages)
+        usage.record_response(model, message, "semanal")
+        part = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
+        full += part
+        if getattr(message, "stop_reason", None) != "max_tokens":
+            break
+        messages.append({"role": "assistant", "content": part})
+        messages.append({"role": "user",
+                         "content": "Seguí exactamente desde donde se cortó, sin repetir lo ya escrito."})
     return full.strip()
 
 

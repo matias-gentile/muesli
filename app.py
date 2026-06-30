@@ -11,6 +11,7 @@ import shutil
 import sys
 import threading
 import time
+import datetime
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request, send_file, send_from_directory
@@ -25,7 +26,7 @@ from audio_capture import ChunkedRecorder
 from config import RECORDINGS_DIR
 from screen_capture import ScreenCaptureRecorder
 from session import Session
-from summarize import list_templates, summarize, type_label
+from summarize import list_templates, summarize, type_label, weekly_digest
 
 
 def _resource(rel: str) -> str:
@@ -311,6 +312,36 @@ def resummarize(note_id):
 
     storage.update_summary(note_id, summary)
     return jsonify({"summary": summary, "id": note_id})
+
+
+@app.route("/api/weekly", methods=["POST"])
+def weekly():
+    if not config.get("ANTHROPIC_API_KEY"):
+        return jsonify({"error": "Falta la API key de Claude (cargala en ⚙ Configuración)."}), 400
+    now = datetime.datetime.now()
+    since = (now - datetime.timedelta(days=7)).isoformat()
+    notes = storage.notes_for_weekly(since)
+    if not notes:
+        return jsonify({"error": "No hay reuniones en los últimos 7 días para resumir."}), 400
+
+    data = request.get_json(silent=True) or {}
+    detail = data.get("detail", "normal")
+    if detail not in ("corto", "normal", "extenso"):
+        detail = "normal"
+    model = data.get("model") or None
+    allowed = {"claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8", config.get("CLAUDE_MODEL")}
+    if model and model not in allowed:
+        model = None
+    try:
+        digest = weekly_digest(notes, detail=detail, model=model)
+    except Exception as e:
+        return jsonify({"error": f"No se pudo generar el resumen semanal: {e}"}), 502
+
+    desde = (now - datetime.timedelta(days=7)).strftime("%d/%m")
+    hasta = now.strftime("%d/%m")
+    title = f"Resumen semanal · {desde}–{hasta}"
+    saved = storage.save_note(title, "", digest, "", ctype="semanal")
+    return jsonify({"id": saved["id"], "summary": digest, "count": len(notes)})
 
 
 def _note_or_404(note_id):

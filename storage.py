@@ -226,6 +226,22 @@ def list_notes() -> list:
     return [{"id": r[0], "title": r[1], "created_at": r[2], "ctype": r[3]} for r in rows]
 
 
+def notes_for_weekly(since_iso: str) -> list:
+    """Notas creadas desde `since_iso` con su resumen, para el digest semanal.
+    Excluye los resúmenes semanales (ctype 'semanal') para que no se incluyan a sí mismos.
+    Orden cronológico ascendente (como transcurrió la semana)."""
+    c = _conn()
+    rows = c.execute(
+        "SELECT id, title, created_at, ctype, summary FROM notes "
+        "WHERE created_at >= ? AND (ctype IS NULL OR ctype != 'semanal') "
+        "ORDER BY created_at ASC",
+        (since_iso,),
+    ).fetchall()
+    c.close()
+    return [{"id": r[0], "title": r[1], "created_at": r[2], "ctype": r[3],
+             "summary": r[4] or ""} for r in rows]
+
+
 def get_note(note_id: int):
     c = _conn()
     r = c.execute(

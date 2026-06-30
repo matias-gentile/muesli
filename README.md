@@ -354,6 +354,15 @@ justo ahí se corta la conexión, **no perdés la grabación**:
   el **nivel de detalle** (corto / normal / **extenso**, para charlas largas que ameritan un
   resumen más completo) y el **modelo** (Haiku / Sonnet / Opus) solo para esa regeneración.
   La llamada reintenta sola ante cortes breves.
+
+> ### Resumen semanal (on-demand)
+> El botón **📅 Resumen semanal** (abajo a la izquierda) junta los resúmenes de tus reuniones
+> de los **últimos 7 días** en un solo digest: panorama de la semana, **temas recurrentes**,
+> decisiones y **pendientes consolidados** (con de qué reunión salió cada uno), más una línea
+> por reunión. Se arma a partir de los resúmenes ya guardados (rápido y barato, no reprocesa
+> las transcripciones) y elegís **detalle** y **modelo** como en Regenerar. Se **guarda en tu
+> historial** como una nota especial (marcada con 📅) para releerla, y le podés "preguntar"
+> igual que a una reunión.
 - Si la nota no llegó a guardarse (versión vieja, o cerraste la app), el audio sigue
   en `recordings/meeting-<fecha>/`. En el panel, esas grabaciones aparecen abajo en
   **"Sin procesar"** con un botón **"Recuperar"**, que las re-transcribe y resume sin

@@ -482,6 +482,11 @@
   .regen-lbl{font-size:12px; color:var(--text-faint); min-width:52px; font-weight:600;}
   .regen-actions{display:flex; gap:8px; margin-top:4px;}
   .regen-card .tone-chips{margin-bottom:0;}
+  /* Resumen semanal */
+  .weekly-title{font-family:var(--font-display); font-size:24px; font-weight:600; margin:6px 0 4px;}
+  .weekly-caption{font-size:13px; color:var(--text-dim); margin-bottom:14px; max-width:640px; line-height:1.55;}
+  .weekly-count{font-size:13px; color:var(--text); margin-bottom:12px;}
+  .type-badge.weekly-badge{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
   /* Panel de gasto estimado */
   .usage-box{margin-top:4px; font-size:13.5px; color:var(--text-dim); line-height:1.55;}
   .usage-cost{font-family:var(--font-display); font-size:26px; font-weight:600; color:var(--text); line-height:1.1;}
@@ -624,6 +629,7 @@
     </div>
     <div id="recoverable" class="side-section"></div>
     <div class="side-bottom">
+      <button class="settings-btn" onclick="openWeekly()" title="Resumen de tus reuniones de los últimos 7 días">📅 Resumen semanal</button>
       <button class="settings-btn spend-pill" id="spendPill" onclick="openSettings()" style="display:none"></button>
       <button class="settings-btn" onclick="startTutorial()">❓ Cómo usar Muesli</button>
       <button class="settings-btn" id="themeBtn" onclick="toggleTheme()">🌙 Modo oscuro</button>
@@ -1107,6 +1113,39 @@ function render(o) {
   const enhancedNotes = (o.enhancedNotes || "").trim();
   const hasSegments = (o.segmentsCount || 0) > 0;
   const keyMoments = o.keyMoments || [];
+
+  // Vista especial para resúmenes semanales (nota con ctype 'semanal'): muestra el digest
+  // y "preguntar", sin las herramientas que necesitan transcripción (Regenerar/Email/etc.).
+  if (noteId && o.ctype === "semanal") {
+    const dtW = o.createdAt ? new Date(o.createdAt).toLocaleString("es") : "";
+    document.getElementById("result").innerHTML = `
+      <button class="back-link" onclick="newRecording()">← Volver</button>
+      <div class="note-header">
+        <input id="titleEdit" class="note-title-edit" value="${escAttr(o.title)}"
+               title="Clic para renombrar" onchange="saveTitle(${noteId}, this.value)" />
+        <span class="note-date">📅 ${dtW}</span>
+      </div>
+      <div class="weekly-caption">Generado a partir de los resúmenes de tus reuniones de los últimos 7 días.</div>
+      <div class="card">${mdToHtml(curSummary)}</div>
+      <div class="note-actions">
+        <button class="edit-btn" onclick="copySummary()">⧉ Copiar</button>
+        <a class="edit-btn" href="/api/notes/${noteId}/download" download>⤓ .md</a>
+        <button class="edit-btn" onclick="editSummary(${noteId})">✎ Editar</button>
+      </div>
+      <div class="ai-section">
+        <div id="aiOutput"></div>
+        <div class="ask-eyebrow">Preguntale a este resumen semanal</div>
+        <div id="askLog" class="ask-log"></div>
+        <div class="ask-row">
+          <input id="askInput" class="ask-input" autocomplete="off"
+                 placeholder="Ej: ¿qué pendientes quedaron de la semana?"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();askNote(${noteId});}" />
+          <button id="askSend" class="ask-send" onclick="askNote(${noteId})" title="Usa Claude · consume tokens">Preguntar<span class="ai-spark">✦</span></button>
+        </div>
+      </div>`;
+    return;
+  }
+
   let header = "";
   if (noteId) {
     const dt = o.createdAt ? new Date(o.createdAt).toLocaleString("es") : "";
@@ -1553,11 +1592,13 @@ function bucketOf(iso) {
 }
 
 function noteItemHtml(n) {
-  const label = templateLabels[n.ctype];
-  const badge = label ? `<span class="type-badge">${label}</span>` : "";
+  const isWeekly = n.ctype === "semanal";
+  const label = isWeekly ? "Semanal" : templateLabels[n.ctype];
+  const badge = label ? `<span class="type-badge${isWeekly ? " weekly-badge" : ""}">${label}</span>` : "";
+  const icon = isWeekly ? "📅 " : "";
   return `<div class="note-item ${n.id === activeId ? "active" : ""}" onclick="openNote(${n.id})">
       <div class="note-main">
-        <div class="t">${(n.title || "Sin título").replace(/</g, "&lt;")}</div>
+        <div class="t">${icon}${(n.title || "Sin título").replace(/</g, "&lt;")}</div>
         <div class="d">${compactDate(n.created_at)} ${badge}</div>
       </div>
       <button class="note-del" title="Borrar" onclick="deleteNote(event, ${n.id})">✕</button>
@@ -1620,6 +1661,7 @@ async function openNote(id) {
   setStatus("");
   render({ summary: n.summary, transcript: n.transcript, noteId: n.id,
            title: n.title, createdAt: n.created_at, hasAudio: n.has_audio,
+           ctype: n.ctype,
            manualNotes: n.manual_notes, enhancedNotes: n.enhanced_notes,
            segmentsCount: n.segments_count, chunkMap: n.chunk_map, keyMoments: n.key_moments });
   if (!recording) showNoteView();  // ver nota a pantalla completa (salvo si estás grabando)
@@ -1711,6 +1753,78 @@ function renderRegen() {
       <div class="regen-actions">${btn}<button class="edit-btn" ${loading ? "disabled" : ""} onclick="closeRegen()">Cancelar</button></div>
       ${err}
       <div class="enh-hint" style="margin-top:9px">"Extenso" da un resumen más largo (usa más tokens); "Opus" es el más capaz y caro. El modelo por defecto sale de ⚙ Configuración.</div>
+    </div>`;
+}
+
+// ===== Resumen semanal (on-demand, últimos 7 días) =====
+let weeklyState = { detail: "normal", model: "", configModel: "", loading: false, error: null };
+
+function weeklyInRangeCount() {
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  return allNotes.filter(n => n.ctype !== "semanal" && new Date(n.created_at).getTime() >= cutoff).length;
+}
+
+async function openWeekly() {
+  if (recording) { setStatus("Esperá a que termine la grabación para generar el resumen semanal."); return; }
+  activeId = null;
+  let configModel = "claude-sonnet-4-6";
+  try { configModel = (await (await fetch("/api/settings")).json()).CLAUDE_MODEL || configModel; } catch (e) {}
+  let detail = "normal", model = "";
+  try { detail = localStorage.getItem("muesli-regen-detail") || "normal"; } catch (e) {}
+  try { model = localStorage.getItem("muesli-regen-model") || ""; } catch (e) {}
+  weeklyState = { detail, model: model || configModel, configModel, loading: false, error: null };
+  renderWeekly();
+  showNoteView();
+}
+
+function weeklySet(field, val) { if (weeklyState.loading) return; weeklyState[field] = val; renderWeekly(); }
+
+async function runWeekly() {
+  if (weeklyState.loading) return;
+  const { detail, model } = weeklyState;
+  try { localStorage.setItem("muesli-regen-detail", detail); localStorage.setItem("muesli-regen-model", model); } catch (e) {}
+  weeklyState.loading = true; weeklyState.error = null;
+  renderWeekly();
+  try {
+    const r = await fetch("/api/weekly", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ detail, model }),
+    });
+    const d = await r.json();
+    weeklyState.loading = false;
+    if (!r.ok || d.error) { weeklyState.error = d.error || "no se pudo generar el resumen semanal"; renderWeekly(); return; }
+    await loadList();
+    await openNote(d.id);
+  } catch (e) {
+    weeklyState.loading = false; weeklyState.error = "Error de red."; renderWeekly();
+  }
+}
+
+function renderWeekly() {
+  const { detail, model, configModel, loading, error } = weeklyState;
+  const count = weeklyInRangeCount();
+  const dchips = REGEN_DETAILS.map(d =>
+    `<button class="tone-chip ${d.key === detail ? "on" : ""}" ${loading ? "disabled" : ""} onclick="weeklySet('detail','${d.key}')">${d.label}</button>`).join("");
+  const mchips = regenModelList(configModel).map(m =>
+    `<button class="tone-chip ${m.key === model ? "on" : ""}" ${loading ? "disabled" : ""} onclick="weeklySet('model','${m.key}')" title="${m.hint}">${m.label}</button>`).join("");
+  const btn = loading
+    ? `<button class="regen-btn" disabled>Generando…</button>`
+    : `<button class="regen-btn" onclick="runWeekly()" title="Usa Claude · consume tokens">✦ Generar resumen</button>`;
+  const err = error ? `<div class="ai-warn" style="margin-top:9px">⚠ ${escHtml(error)}</div>` : "";
+  const countTxt = count
+    ? `Hay <b>${count}</b> ${count === 1 ? "reunión" : "reuniones"} en los últimos 7 días.`
+    : `No se ven reuniones de los últimos 7 días en la lista. Si grabaste algo recién, probá igual.`;
+  document.getElementById("result").innerHTML = `
+    <button class="back-link" onclick="newRecording()">← Volver</button>
+    <h2 class="weekly-title">📅 Resumen semanal</h2>
+    <div class="weekly-caption">Junta los resúmenes de tus reuniones de los <b>últimos 7 días</b> en un solo digest (temas recurrentes, decisiones y pendientes). Se guarda en tu historial para releerlo.</div>
+    <div class="regen-card">
+      <div class="weekly-count">${countTxt}</div>
+      <div class="regen-row"><span class="regen-lbl">Detalle</span><div class="tone-chips">${dchips}</div></div>
+      <div class="regen-row"><span class="regen-lbl">Modelo</span><div class="tone-chips">${mchips}</div></div>
+      <div class="regen-actions">${btn}</div>
+      ${err}
+      <div class="enh-hint" style="margin-top:9px">Se arma a partir de los resúmenes ya guardados (rápido y barato). "Extenso" / "Opus" lo hacen más completo y caro.</div>
     </div>`;
 }
 
