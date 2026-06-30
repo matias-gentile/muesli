@@ -710,13 +710,19 @@
         <div class="test-hint">Precios por millón de tokens (entrada/salida), aprox. junio 2026. Más barato = más rápido; más caro = más capaz. Para resúmenes de reuniones, Sonnet suele ser el mejor equilibrio.</div>
         <label class="fld">
           <span>Modelo de Whisper (transcripción)</span>
-          <select id="setWhisper">
-            <option value="tiny">tiny — más rápido, menos preciso</option>
-            <option value="base">base — equilibrado (recomendado)</option>
-            <option value="small">small — más preciso</option>
-            <option value="medium">medium — lento</option>
-            <option value="large-v3">large-v3 — el más preciso, muy lento</option>
+          <select id="setWhisper" onchange="onWhisperChange()">
+            <option value="tiny">tiny — el más rápido, calidad básica</option>
+            <option value="base">base — rápido (lo que usás hoy)</option>
+            <option value="small">small — buen salto de calidad, sigue liviano · recomendado</option>
+            <option value="medium">medium — más preciso, ~3× más lento (~1.5 GB)</option>
+            <option value="large-v3">large-v3 — máxima calidad, lento (~10×) y pesado (~3 GB)</option>
+            <option value="large-v3-turbo">large-v3-turbo — casi como large, mucho más rápido · multilingüe</option>
+            <option value="distil-large-v3">distil-large-v3 — destilado, muy rápido · afinado para inglés</option>
+            <option value="__custom__">Personalizado…</option>
           </select>
+        </label>
+        <input id="setWhisperCustom" type="text" placeholder="repo de Hugging Face o ruta local (ej. Systran/faster-distil-whisper-large-v3)" style="display:none" />
+        <div class="test-hint">Más grande = más preciso, pero más lento y más RAM (se descarga la 1ª vez). Para español, <b>small</b> o <b>medium</b> son el salto fácil, y <b>large-v3-turbo</b> es rápido y multilingüe. Los <b>distil</b> están afinados para inglés (en español rinden algo menos). En "Personalizado" podés poner un repo de Hugging Face en formato CTranslate2 o una carpeta local. Si un modelo nuevo no carga, actualizá faster-whisper (<code>pip install -U faster-whisper</code>).</div>
         </label>
         <label class="fld">
           <span>Duración de cada segmento (segundos)</span>
@@ -1783,7 +1789,16 @@ async function openSettings() {
     document.getElementById("setClaudeCustom").value = model;
   }
   onModelChange();
-  document.getElementById("setWhisper").value = s.WHISPER_MODEL || "base";
+  const wm = s.WHISPER_MODEL || "base";
+  const knownW = ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "distil-large-v3"];
+  if (knownW.includes(wm)) {
+    document.getElementById("setWhisper").value = wm;
+    document.getElementById("setWhisperCustom").value = "";
+  } else {
+    document.getElementById("setWhisper").value = "__custom__";
+    document.getElementById("setWhisperCustom").value = wm;
+  }
+  onWhisperChange();
   document.getElementById("setChunk").value = s.CHUNK_SECONDS || "600";
   document.getElementById("setAutoStop").value = s.AUTO_STOP_SILENCE_MIN || "0";
   document.getElementById("setMaxRec").value = s.MAX_RECORDING_MIN || "0";
@@ -1804,6 +1819,11 @@ function onModelChange() {
   custom.style.display = (document.getElementById("setClaude").value === "__custom__") ? "" : "none";
 }
 
+function onWhisperChange() {
+  const custom = document.getElementById("setWhisperCustom");
+  custom.style.display = (document.getElementById("setWhisper").value === "__custom__") ? "" : "none";
+}
+
 function closeSettings() { document.getElementById("settingsOverlay").style.display = "none"; }
 
 async function saveSettings() {
@@ -1813,7 +1833,9 @@ async function saveSettings() {
     : modelSel;
   const body = {
     CLAUDE_MODEL: modelVal,
-    WHISPER_MODEL: document.getElementById("setWhisper").value,
+    WHISPER_MODEL: ((document.getElementById("setWhisper").value === "__custom__"
+      ? document.getElementById("setWhisperCustom").value.trim()
+      : document.getElementById("setWhisper").value) || "base"),
     CHUNK_SECONDS: document.getElementById("setChunk").value,
     AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
     MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,

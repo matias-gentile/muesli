@@ -398,7 +398,7 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 |---|---|
 | `ANTHROPIC_API_KEY` | Tu clave de la API de Claude |
 | `CLAUDE_MODEL` | `claude-sonnet-4-6` (recomendado), `claude-opus-4-8` (+calidad), `claude-haiku-4-5-20251001` (+barato) |
-| `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` (más grande = más preciso y lento) |
+| `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` · `large-v3-turbo` (rápido y multilingüe) · `distil-large-v3` (destilado, afinado para inglés). También acepta un repo de Hugging Face en formato CTranslate2 (ej. `Systran/faster-distil-whisper-large-v3`) o una ruta local. Más grande = más preciso y lento |
 | `WHISPER_VAD` | `0` (off, más permisivo con audio bajo) o `1` (descarta silencios) |
 | `CAPTURE_BACKEND` | `screencapturekit` (por defecto, sin Audio MIDI). `blackhole` es un backend heredado que no aparece en la interfaz y requiere libs de audio + Audio MIDI |
 | `CHUNK_SECONDS` | Duración de cada segmento de grabación (por defecto `600` = 10 min) |
