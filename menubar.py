@@ -13,10 +13,12 @@ Requiere macOS + rumps + pywebview (ver requirements.txt).
 from __future__ import annotations
 
 import datetime
+import fcntl
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -150,6 +152,38 @@ def notify(title, text):
 def start_flask():
     flask_app.app.run(host="127.0.0.1", port=5001, debug=False,
                       use_reloader=False, threaded=True)
+
+
+# --- Instancia única -------------------------------------------------------
+# Evita que aparezcan varios íconos de Muesli en la barra: si por lo que sea se
+# lanza un segundo proceso (macOS relanza la .app, un ítem de inicio, doble clic,
+# una carrera al abrir), el segundo detecta que ya hay uno corriendo y sale antes
+# de dibujar el ícono. Usamos un lock de archivo exclusivo: el SO lo libera solo
+# cuando el proceso termina —incluso si lo matan—, así que nunca queda "trabado".
+_SINGLE_INSTANCE_FH = None  # se mantiene abierto toda la vida del proceso (NO cerrar)
+
+
+def _lock_path() -> str:
+    base = os.path.expanduser("~/Library/Application Support/Muesli")
+    try:
+        os.makedirs(base, exist_ok=True)
+        return os.path.join(base, "menubar.lock")
+    except Exception:
+        return os.path.join(tempfile.gettempdir(), "muesli-menubar.lock")
+
+
+def _ensure_single_instance() -> bool:
+    """True si somos la única instancia; False si ya hay otra corriendo."""
+    global _SINGLE_INSTANCE_FH
+    try:
+        fh = open(_lock_path(), "w")
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False   # otra instancia ya tiene el lock
+    except Exception:
+        return True    # ante cualquier otro problema, no bloqueamos el arranque
+    _SINGLE_INSTANCE_FH = fh  # guardamos la referencia para que no se cierre el fd
+    return True
 
 
 # Cadencia del sondeo de estado: rápido cuando hay actividad, lento en reposo
@@ -529,6 +563,12 @@ class MuesliBar(rumps.App):
 
 
 def main():
+    # Instancia única: si ya hay un Muesli corriendo, avisamos y salimos SIN dibujar
+    # otro ícono en la barra (así no se "duplica solo").
+    if not _ensure_single_instance():
+        notify("Muesli ya está abierto", "Ya hay una instancia corriendo en la barra de menú.")
+        sys.exit(0)
+
     # Pedí permiso de micrófono apenas arranca (si no, los dispositivos de entrada
     # aparecen con 0 canales y no se ven). Mostrá el diálogo del sistema temprano.
     from mic_permission import request_microphone_access
