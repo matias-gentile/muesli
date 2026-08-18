@@ -104,6 +104,58 @@ def available() -> bool:
     return _core_audio() is not None
 
 
-if __name__ == "__main__":
-    print("CoreAudio disponible:", available())
+def _device_name(lib, dev_id) -> str:
+    """Nombre del dispositivo (solo para el diagnóstico)."""
+    try:
+        cf = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        name_ref = ctypes.c_void_p()
+        got = ctypes.c_uint32(ctypes.sizeof(name_ref))
+        addr = _Addr(0x6C6E616D, _SCOPE_GLOBAL, 0)  # 'lnam' kAudioObjectPropertyName
+        err = lib.AudioObjectGetPropertyData(
+            ctypes.c_uint32(dev_id), ctypes.byref(addr),
+            ctypes.c_uint32(0), None, ctypes.byref(got), ctypes.byref(name_ref))
+        if err != 0 or not name_ref.value:
+            return f"(id {dev_id})"
+        cf.CFStringGetCStringPtr.restype = ctypes.c_char_p
+        ptr = cf.CFStringGetCStringPtr(name_ref, 0x08000100)  # kCFStringEncodingUTF8
+        if ptr:
+            return ptr.decode("utf-8", "replace")
+        buf = ctypes.create_string_buffer(256)
+        if cf.CFStringGetCString(name_ref, buf, 256, 0x08000100):
+            return buf.value.decode("utf-8", "replace")
+        return f"(id {dev_id})"
+    except Exception:
+        return f"(id {dev_id})"
+
+
+def diagnose():
+    """Imprime qué ve CoreAudio, para depurar por qué (no) detecta la llamada."""
+    lib = _core_audio()
+    print("CoreAudio disponible:", lib is not None)
+    if lib is None:
+        print("→ Sin CoreAudio (¿no es macOS?). La detección queda apagada.")
+        return
+    devs = _devices(lib)
+    print(f"Dispositivos de audio encontrados: {len(devs)}")
+    inputs = 0
+    for d in devs:
+        try:
+            has_in = _has_input(lib, d)
+            running = _is_running(lib, d)
+        except Exception as e:
+            print(f"  · (id {d}) error al consultar: {e}")
+            continue
+        if has_in:
+            inputs += 1
+            estado = "EN USO ✅" if running else "libre"
+            print(f"  · [entrada] {_device_name(lib, d)} → {estado}")
+    if not inputs:
+        print("⚠ No se detectó ningún dispositivo de ENTRADA. Si estás en una llamada,")
+        print("  puede que la app use un dispositivo que CoreAudio no marca como entrada.")
+    print()
     print("Micrófono en uso ahora:", mic_in_use())
+
+
+if __name__ == "__main__":
+    diagnose()

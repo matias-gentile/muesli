@@ -212,6 +212,7 @@ class MuesliBar(rumps.App):
         self._call_streak = 0        # ciclos seguidos con el mic en uso
         self._call_prompted = False  # ya avisamos para esta llamada
         self._call_idle = 0          # ciclos seguidos sin mic (para resetear)
+        self._call_active = False    # hay una llamada en curso (mic en uso)
 
         self.record_item = rumps.MenuItem("● Grabar", callback=self.toggle_record)
         self.status_item = rumps.MenuItem("Iniciando…")
@@ -523,12 +524,14 @@ class MuesliBar(rumps.App):
         if in_use:
             self._call_idle = 0
             self._call_streak += 1
+            self._call_active = True
             # mientras confirmamos, sondeá rápido para avisarte en ~10 s y no en ~30
             if not self._call_prompted:
                 self._set_interval(ACTIVE_INTERVAL)
             # ~3 ciclos seguidos para no saltar por un sonido corto (Siri, un "hola")
             if self._call_streak >= 3 and not self._call_prompted:
                 self._call_prompted = True
+                print("[call_detect] micrófono en uso → aviso de llamada", flush=True)
                 notify("¿Estás en una llamada?",
                        "Muesli detectó el micrófono en uso. Abrí el menú y tocá "
                        "\"● Grabar\" si querés grabarla.")
@@ -537,6 +540,7 @@ class MuesliBar(rumps.App):
             self._call_idle += 1
             # tras un rato sin micrófono, la llamada terminó: rearmamos el aviso
             if self._call_idle >= 3:
+                self._call_active = False
                 self._call_prompted = False
 
     def tick(self, _):
@@ -598,8 +602,14 @@ class MuesliBar(rumps.App):
                 notify("Muesli", s.get("error") or "Falló el procesado")
                 self._notified = True
         else:
-            self.status_item.title = "Listo"
-            self.title = self._idle_title
+            if getattr(self, "_call_prompted", False) and getattr(self, "_call_active", False):
+                # Aviso VISIBLE (no depende del permiso de notificaciones de macOS):
+                # se ve en el menú y con un puntito en el ícono de la barra.
+                self.status_item.title = "🔴 Llamada detectada — tocá ● Grabar"
+                self.title = "•" if self._has_icon else "🔴"
+            else:
+                self.status_item.title = "Listo"
+                self.title = self._idle_title
 
 
 def main():
