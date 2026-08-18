@@ -768,6 +768,16 @@
           <input id="setNotionDb" type="text" placeholder="32 caracteres" />
         </label>
 
+        <div class="fld-sep">Llamadas</div>
+        <label class="fld">
+          <span>Avisarme cuando detecte una llamada</span>
+          <select id="setCallDetect">
+            <option value="1">Sí — avisarme para grabarla</option>
+            <option value="0">No</option>
+          </select>
+        </label>
+        <div class="test-hint">Si otra app empieza a usar el micrófono (Zoom, Meet, Teams, Slack…), Muesli te manda una notificación para que no te olvides de grabar. <b>Solo avisa</b>: nunca graba solo, y no mira qué app es ni escucha nada — solo consulta si el micrófono está en uso.</div>
+
         <div class="fld-sep">Almacenamiento</div>
         <label class="fld">
           <span>Borrar el audio automáticamente al terminar</span>
@@ -1917,6 +1927,7 @@ async function openSettings() {
   document.getElementById("setAutoStop").value = s.AUTO_STOP_SILENCE_MIN || "0";
   document.getElementById("setMaxRec").value = s.MAX_RECORDING_MIN || "0";
   document.getElementById("setAutoPurge").value = s.AUTO_PURGE_AUDIO || "0";
+  document.getElementById("setCallDetect").value = s.CALL_DETECT || "0";
   document.getElementById("setNotionKey").value = "";
   document.getElementById("setNotionKey").placeholder =
     s.NOTION_API_KEY_set ? "•••••• configurado — vacío = no cambiar" : "dejá vacío para no cambiar";
@@ -1954,6 +1965,7 @@ async function saveSettings() {
     AUTO_STOP_SILENCE_MIN: document.getElementById("setAutoStop").value,
     MAX_RECORDING_MIN: document.getElementById("setMaxRec").value,
     AUTO_PURGE_AUDIO: document.getElementById("setAutoPurge").value,
+    CALL_DETECT: document.getElementById("setCallDetect").value,
     MONTHLY_BUDGET_USD: document.getElementById("setBudget").value || "0",
     NOTION_DATABASE_ID: document.getElementById("setNotionDb").value.trim(),
   };

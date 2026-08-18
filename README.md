@@ -415,6 +415,7 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 | `MAX_RECORDING_MIN` | Tope duro de duración en minutos (`0` = desactivado; por defecto `180` = 3 h) |
 | `AUTO_PURGE_AUDIO` | Borrar el `.wav` automáticamente al terminar de transcribir (`1` = sí, `0` = no; por defecto `0`) |
 | `MONTHLY_BUDGET_USD` | Presupuesto mensual estimado para la API (USD); `0` = sin límite. Muesli muestra el gasto estimado y una barra de progreso |
+| `CALL_DETECT` | Avisarte con una notificación cuando otra app empieza a usar el micrófono ≈ estás en una llamada (`1` = sí, por defecto; `0` = no). **Solo avisa, nunca graba solo** |
 | `NOTION_API_KEY` | (Opcional) Token de tu integración de Notion |
 | `NOTION_DATABASE_ID` | (Opcional) ID de la base donde se crean las páginas |
 

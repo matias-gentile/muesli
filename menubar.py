@@ -26,6 +26,8 @@ import urllib.request
 import rumps
 
 import app as flask_app  # importa la app Flask (no la arranca: eso pasa en start_flask)
+import call_detect
+import config
 
 BASE = "http://127.0.0.1:5001"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -206,6 +208,10 @@ class MuesliBar(rumps.App):
         self.recording = False
         self._t0 = None
         self._notified = True  # arranca en True para no notificar al abrir
+        # Detección de llamada (micrófono en uso por otra app). Solo avisa.
+        self._call_streak = 0        # ciclos seguidos con el mic en uso
+        self._call_prompted = False  # ya avisamos para esta llamada
+        self._call_idle = 0          # ciclos seguidos sin mic (para resetear)
 
         self.record_item = rumps.MenuItem("● Grabar", callback=self.toggle_record)
         self.status_item = rumps.MenuItem("Iniciando…")
@@ -500,6 +506,39 @@ class MuesliBar(rumps.App):
         except Exception:
             pass
 
+    def _check_call(self, recording_now: bool):
+        """Si otra app empieza a usar el micrófono (≈ entraste a una llamada), avisa
+        UNA vez para que decidas grabar. Nunca arranca a grabar solo."""
+        if not config.get_bool("CALL_DETECT"):
+            return
+        if recording_now:
+            # ya estás grabando: no molestar, y dejar listo el aviso para la próxima
+            self._call_streak = 0
+            self._call_prompted = True
+            return
+        try:
+            in_use = call_detect.mic_in_use()
+        except Exception:
+            return
+        if in_use:
+            self._call_idle = 0
+            self._call_streak += 1
+            # mientras confirmamos, sondeá rápido para avisarte en ~10 s y no en ~30
+            if not self._call_prompted:
+                self._set_interval(ACTIVE_INTERVAL)
+            # ~3 ciclos seguidos para no saltar por un sonido corto (Siri, un "hola")
+            if self._call_streak >= 3 and not self._call_prompted:
+                self._call_prompted = True
+                notify("¿Estás en una llamada?",
+                       "Muesli detectó el micrófono en uso. Abrí el menú y tocá "
+                       "\"● Grabar\" si querés grabarla.")
+        else:
+            self._call_streak = 0
+            self._call_idle += 1
+            # tras un rato sin micrófono, la llamada terminó: rearmamos el aviso
+            if self._call_idle >= 3:
+                self._call_prompted = False
+
     def tick(self, _):
         try:
             s = api_get("/api/status")
@@ -511,6 +550,7 @@ class MuesliBar(rumps.App):
         # cadencia adaptativa: rápido si hay actividad, lento en reposo (ahorra batería)
         busy = rec or st in ("transcribing", "summarizing")
         self._set_interval(ACTIVE_INTERVAL if busy else IDLE_INTERVAL)
+        self._check_call(rec)
 
         # sincroniza con grabaciones iniciadas/paradas desde el panel
         if rec and not self.recording:

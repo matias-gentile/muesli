@@ -54,6 +54,9 @@ _DEFAULTS = {
     "AUTO_PURGE_AUDIO": os.getenv("AUTO_PURGE_AUDIO", "0"),
     # Presupuesto mensual estimado para la API de Claude (USD). "0" = sin presupuesto.
     "MONTHLY_BUDGET_USD": os.getenv("MONTHLY_BUDGET_USD", "0"),
+    # Avisar (notificación) cuando otra app empieza a usar el micrófono ≈ estás en
+    # una llamada. Solo avisa: nunca graba solo.
+    "CALL_DETECT": os.getenv("CALL_DETECT", "1"),
     "NOTION_API_KEY": os.getenv("NOTION_API_KEY", ""),
     "NOTION_DATABASE_ID": os.getenv("NOTION_DATABASE_ID", ""),
 }
