@@ -194,6 +194,36 @@ ACTIVE_INTERVAL = 1.0    # grabando o procesando
 IDLE_INTERVAL = 10.0     # en reposo
 
 
+def _prompt_target_class():
+    """Objeto ObjC que recibe los clics de los botones del aviso de llamada.
+    (PyObjC exige un NSObject como target; lo creamos perezosamente para no
+    importar AppKit al arrancar.)"""
+    import objc
+    from Foundation import NSObject
+
+    class _MuesliPromptTarget(NSObject):
+        def initWithBar_(self, bar):
+            self = objc.super(_MuesliPromptTarget, self).init()
+            if self is None:
+                return None
+            self._bar = bar
+            return self
+
+        def record_(self, _sender):
+            try:
+                self._bar._call_prompt_record()
+            except Exception as e:
+                print(f"[call_prompt] error al grabar: {e}", flush=True)
+
+        def dismiss_(self, _sender):
+            try:
+                self._bar._call_prompt_dismiss()
+            except Exception:
+                pass
+
+    return _MuesliPromptTarget
+
+
 class MuesliBar(rumps.App):
     def __init__(self):
         self._has_icon = os.path.exists(MENUBAR_ICON)
@@ -213,6 +243,7 @@ class MuesliBar(rumps.App):
         self._call_prompted = False  # ya avisamos para esta llamada
         self._call_idle = 0          # ciclos seguidos sin mic (para resetear)
         self._call_active = False    # hay una llamada en curso (mic en uso)
+        self._call_dismissed = False # tocaste "Ahora no" en esta llamada
 
         self.record_item = rumps.MenuItem("● Grabar", callback=self.toggle_record)
         self.status_item = rumps.MenuItem("Iniciando…")
@@ -411,8 +442,7 @@ class MuesliBar(rumps.App):
         rumps.quit_application()
 
     # ---- indicador flotante de grabación (mini-ventana siempre visible) ----
-    def _ensure_float(self):
-        if getattr(self, "_float_win", None) is not None:
+    def _ensure_float(self):        if getattr(self, "_float_win", None) is not None:
             return self._float_win
         try:
             from AppKit import (
@@ -494,6 +524,126 @@ class MuesliBar(rumps.App):
             except Exception:
                 pass
 
+    # ---- aviso flotante de llamada detectada ----
+    def _ensure_call_prompt(self):
+        """Panel flotante con '¿Grabar esta llamada?' + botones. No depende del
+        permiso de notificaciones de macOS (que suele bloquear las de osascript)."""
+        if getattr(self, "_prompt_win", None) is not None:
+            return self._prompt_win
+        try:
+            from AppKit import (
+                NSPanel, NSWindowStyleMaskBorderless, NSWindowStyleMaskNonactivatingPanel,
+                NSBackingStoreBuffered, NSColor, NSTextField, NSView, NSFont, NSScreen,
+                NSButton, NSStatusWindowLevel, NSWindowCollectionBehaviorCanJoinAllSpaces,
+                NSWindowCollectionBehaviorStationary, NSWindowCollectionBehaviorFullScreenAuxiliary)
+            w, h = 288.0, 62.0
+            rect = ((0.0, 0.0), (w, h))
+            style = NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+            win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+                rect, style, NSBackingStoreBuffered, False)
+            win.setOpaque_(False)
+            win.setBackgroundColor_(NSColor.clearColor())
+            win.setLevel_(NSStatusWindowLevel)
+            win.setHasShadow_(True)
+            win.setMovableByWindowBackground_(True)
+            win.setCollectionBehavior_(
+                NSWindowCollectionBehaviorCanJoinAllSpaces
+                | NSWindowCollectionBehaviorStationary
+                | NSWindowCollectionBehaviorFullScreenAuxiliary)
+
+            content = NSView.alloc().initWithFrame_(rect)
+            content.setWantsLayer_(True)
+            content.layer().setCornerRadius_(14.0)
+            content.layer().setBackgroundColor_(
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(0.09, 0.08, 0.07, 0.95).CGColor())
+            win.setContentView_(content)
+
+            dot = NSView.alloc().initWithFrame_(((14.0, h - 26.0), (9.0, 9.0)))
+            dot.setWantsLayer_(True)
+            dot.layer().setCornerRadius_(4.5)
+            dot.layer().setBackgroundColor_(
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(0.93, 0.62, 0.18, 1.0).CGColor())
+            content.addSubview_(dot)
+
+            label = NSTextField.alloc().initWithFrame_(((30.0, h - 29.0), (w - 40.0, 18.0)))
+            label.setBezeled_(False)
+            label.setDrawsBackground_(False)
+            label.setEditable_(False)
+            label.setSelectable_(False)
+            label.setTextColor_(NSColor.whiteColor())
+            label.setFont_(NSFont.systemFontOfSize_(13.0))
+            label.setStringValue_("¿Grabar esta llamada?")
+            content.addSubview_(label)
+
+            target_cls = _prompt_target_class()
+            self._prompt_target = target_cls.alloc().initWithBar_(self)
+
+            rec_btn = NSButton.alloc().initWithFrame_(((14.0, 10.0), (108.0, 24.0)))
+            rec_btn.setTitle_("● Grabar")
+            rec_btn.setBezelStyle_(1)
+            rec_btn.setTarget_(self._prompt_target)
+            rec_btn.setAction_("record:")
+            content.addSubview_(rec_btn)
+
+            no_btn = NSButton.alloc().initWithFrame_(((130.0, 10.0), (108.0, 24.0)))
+            no_btn.setTitle_("Ahora no")
+            no_btn.setBezelStyle_(1)
+            no_btn.setTarget_(self._prompt_target)
+            no_btn.setAction_("dismiss:")
+            content.addSubview_(no_btn)
+
+            try:  # arriba a la derecha, para no tapar el centro de la pantalla
+                vf = NSScreen.mainScreen().visibleFrame()
+                x = vf.origin.x + vf.size.width - w - 16.0
+                y = vf.origin.y + vf.size.height - h - 8.0
+                win.setFrameOrigin_((x, y))
+            except Exception:
+                pass
+
+            self._prompt_win = win
+            return win
+        except Exception as e:
+            print(f"[call_prompt] no pude crear el aviso flotante: {e}", flush=True)
+            self._prompt_win = None
+            return None
+
+    def _show_call_prompt(self):
+        win = self._ensure_call_prompt()
+        if win is None:
+            return
+        try:
+            if not win.isVisible():
+                win.orderFrontRegardless()
+        except Exception:
+            pass
+
+    def _hide_call_prompt(self):
+        win = getattr(self, "_prompt_win", None)
+        if win is not None:
+            try:
+                if win.isVisible():
+                    win.orderOut_(None)
+            except Exception:
+                pass
+
+    def _call_prompt_record(self):
+        """Botón '● Grabar' del aviso: arranca la grabación como desde el menú."""
+        self._hide_call_prompt()
+        self._call_dismissed = True   # ya decidiste: no volver a mostrarlo en esta llamada
+        if not self._recording_now():
+            self.toggle_record(None)
+
+    def _call_prompt_dismiss(self):
+        """Botón 'Ahora no': lo cierra hasta la próxima llamada."""
+        self._hide_call_prompt()
+        self._call_dismissed = True
+
+    def _recording_now(self) -> bool:
+        try:
+            return bool(api_get("/api/status").get("recording"))
+        except Exception:
+            return False
+
     # ---- polling de estado ----
     def _set_interval(self, interval):
         """Cambia la cadencia del timer (rápido/lento) sin recrearlo a mano."""
@@ -516,6 +666,7 @@ class MuesliBar(rumps.App):
             # ya estás grabando: no molestar, y dejar listo el aviso para la próxima
             self._call_streak = 0
             self._call_prompted = True
+            self._hide_call_prompt()
             return
         try:
             in_use = call_detect.mic_in_use()
@@ -532,6 +683,8 @@ class MuesliBar(rumps.App):
             if self._call_streak >= 3 and not self._call_prompted:
                 self._call_prompted = True
                 print("[call_detect] micrófono en uso → aviso de llamada", flush=True)
+                if not getattr(self, "_call_dismissed", False):
+                    self._show_call_prompt()   # aviso visible, sin depender de permisos
                 notify("¿Estás en una llamada?",
                        "Muesli detectó el micrófono en uso. Abrí el menú y tocá "
                        "\"● Grabar\" si querés grabarla.")
@@ -542,6 +695,8 @@ class MuesliBar(rumps.App):
             if self._call_idle >= 3:
                 self._call_active = False
                 self._call_prompted = False
+                self._call_dismissed = False
+                self._hide_call_prompt()
 
     def tick(self, _):
         try:
