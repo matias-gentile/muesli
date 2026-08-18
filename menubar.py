@@ -442,7 +442,8 @@ class MuesliBar(rumps.App):
         rumps.quit_application()
 
     # ---- indicador flotante de grabación (mini-ventana siempre visible) ----
-    def _ensure_float(self):        if getattr(self, "_float_win", None) is not None:
+    def _ensure_float(self):
+        if getattr(self, "_float_win", None) is not None:
             return self._float_win
         try:
             from AppKit import (
