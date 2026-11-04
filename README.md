@@ -20,9 +20,12 @@ Baja la última versión publicada (elige sola la de chip Apple o la de Intel), 
 mismo comando: tus notas y tu configuración no se tocan.
 
 - Necesita **macOS 14 (Sonoma)** o más nuevo. No hace falta Python ni Xcode.
-- La primera vez que grabes, macOS pide **Grabación de pantalla** y **Micrófono**. Después
-  de cada actualización puede volver a pedirlos: la app no está firmada con una cuenta de
-  Apple, así que cada versión nueva cuenta como otra app para macOS.
+- La primera vez que grabes, macOS pide **Grabación de pantalla y audio del sistema** y
+  **Micrófono**. Después de cada actualización puede volver a pedirlos: la app no está firmada
+  con una cuenta de Apple, así que cada versión nueva cuenta como otra app para macOS. Si al
+  tocar Grabar falta el permiso, Muesli no arranca y el panel muestra los pasos con un botón
+  **Dar permiso**: borra el permiso viejo (el que Ajustes muestra activado pero macOS ya no
+  reconoce, y por eso lo pedía cada vez), lo vuelve a pedir y abre Ajustes en el lugar justo.
 - **Sin Terminal:** bajá `Muesli-Mac-chip-Apple.zip` o `Muesli-Mac-Intel.zip` de
   [Releases](https://github.com/matias-gentile/muesli/releases/latest) (en menú Apple →
   Acerca de esta Mac dice qué chip tiene), descomprimilo y mové `Muesli.app` a Aplicaciones. Como no
