@@ -18,6 +18,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 
 import config
 import notion_sync
+import server_sync
 import storage
 import transcribe
 import assistant
@@ -245,8 +246,47 @@ def health():
         "backend": config.get("CAPTURE_BACKEND"),
         "api_key": bool(config.get("ANTHROPIC_API_KEY")),
         "notion": notion_sync.is_enabled(),
+        "memoria": bool(config.get("MEMORIA_TOKEN")),
         "has_notes": len(storage.list_notes()) > 0,
     })
+
+
+# --- Memoria: el server de casa que junta las charlas de todas las Macs (ver server_sync.py) ---
+
+def _from_this_app() -> bool:
+    """Que el pedido venga de la propia pantalla de Muesli y no de otra página abierta en el navegador."""
+    origin = request.headers.get("Origin")
+    return not origin or origin.split("://", 1)[-1] == request.host
+
+
+@app.route("/api/memoria")
+def memoria_status():
+    return jsonify(server_sync.status())
+
+
+@app.route("/api/memoria/pair", methods=["POST"])
+def memoria_pair():
+    if not _from_this_app():
+        return jsonify({"error": "No se pudo hacer desde esa página."}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(server_sync.pair(data.get("code", ""), data.get("url")))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/memoria/disconnect", methods=["POST"])
+def memoria_disconnect():
+    if not _from_this_app():
+        return jsonify({"error": "No se pudo hacer desde esa página."}), 403
+    return jsonify(server_sync.disconnect())
+
+
+@app.route("/api/memoria/sync", methods=["POST"])
+def memoria_sync():
+    if not _from_this_app():
+        return jsonify({"error": "No se pudo hacer desde esa página."}), 403
+    return jsonify(server_sync.sync_now())
 
 
 @app.route("/api/notes")
@@ -554,5 +594,9 @@ if __name__ == "__main__":
     # pueden aparecer con 0 canales hasta concederlo).
     from mic_permission import request_microphone_access
     request_microphone_access()
+    # Con debug=True Flask corre este archivo dos veces (el vigilante y el server de verdad):
+    # el envío a Memoria arranca solo en el segundo, para no mandar todo dos veces.
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        server_sync.start()
     # Puerto 5001 para evitar el conflicto con AirPlay (5000) en macOS.
     app.run(debug=True, port=5001)

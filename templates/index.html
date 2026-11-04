@@ -200,6 +200,20 @@
   .test-hint a{color:var(--accent-text); text-decoration:none; font-weight:600;}
   .test-hint a:hover{text-decoration:underline;}
   .storage-info{font-size:13px; color:var(--text-dim); line-height:1.5;}
+  .mem-box{display:flex; flex-direction:column; gap:10px;}
+  .mem-state{font-size:13px; color:var(--text-dim); line-height:1.5;}
+  .mem-state b{color:var(--text); font-weight:600;}
+  .mem-line{display:flex; gap:8px; align-items:flex-start;}
+  .mem-dot{flex-shrink:0; width:9px; height:9px; border-radius:50%; margin-top:6px; background:var(--text-faint);}
+  .mem-dot.ok{background:var(--ok);}
+  .mem-dot.wait{background:#D9A23A;}
+  .mem-dot.bad{background:var(--rec);}
+  .mem-msg{font-size:13px; line-height:1.45;}
+  .mem-msg.err{color:var(--rec);}
+  .mem-msg.ok{color:var(--ok);}
+  .mem-code{font-variant-numeric:tabular-nums; letter-spacing:.12em; font-size:17px !important; max-width:12em;}
+  .mem-more summary{font-size:12px; color:var(--text-faint); cursor:pointer; padding:4px 0;}
+  .mem-more[open] summary{margin-bottom:6px;}
   .edit-btn.danger{color:var(--rec); border-color:var(--rec);}
   .edit-btn.danger:hover{background:color-mix(in srgb, var(--rec) 10%, transparent);}
   .pause-btn{
@@ -757,6 +771,11 @@
             <option value="240">4 horas</option>
           </select>
         </label>
+
+        <div class="fld-sep">Server de casa (opcional)</div>
+        <div id="memoriaBox" class="mem-box">
+          <div class="mem-state">Buscando…</div>
+        </div>
 
         <div class="fld-sep">Notion (opcional)</div>
         <label class="fld">
@@ -1937,6 +1956,7 @@ async function openSettings() {
   loadHealth();
   loadStorage();
   loadUsage();
+  loadMemoria();
 }
 
 function onModelChange() {
@@ -1949,7 +1969,146 @@ function onWhisperChange() {
   custom.style.display = (document.getElementById("setWhisper").value === "__custom__") ? "" : "none";
 }
 
-function closeSettings() { document.getElementById("settingsOverlay").style.display = "none"; }
+function closeSettings() {
+  document.getElementById("settingsOverlay").style.display = "none";
+  clearTimeout(memoriaTimer);
+}
+
+// --- Server de casa (Memoria): junta las notas de todas tus Macs. Ver server_sync.py ---
+let memoriaTimer = null, memoriaUrl = "http://memoria.local";
+let memoriaNote = null;  // último aviso: sigue visible unos segundos aunque se refresque el estado
+
+async function loadMemoria(msg, msgKind) {
+  clearTimeout(memoriaTimer);
+  const box = document.getElementById("memoriaBox");
+  if (!box) return;
+  let st;
+  try { st = await (await fetch("/api/memoria")).json(); }
+  catch (e) { box.innerHTML = '<div class="mem-state">No pude ver el estado del server de casa.</div>'; return; }
+  memoriaUrl = st.url || memoriaUrl;
+  const msgSlot = '<div id="memMsg" class="mem-msg" role="status" aria-live="polite"></div>';
+  if (!st.connected || st.revoked) {
+    box.innerHTML = memoriaConnectHtml(st) + msgSlot;
+  } else {
+    box.innerHTML = memoriaStatusHtml(st) + msgSlot;
+    // Mientras manda (o todavía está revisando qué falta), refresco el estado para que se vea el avance.
+    const ov = document.getElementById("settingsOverlay");
+    const busy = st.pending > 0 || (!st.last_ok && !st.error);
+    if (busy && ov.style.display !== "none") memoriaTimer = setTimeout(() => loadMemoria(), 2000);
+  }
+  if (msg) memoriaNote = { msg, kind: msgKind, until: Date.now() + 10000 };
+  if (memoriaNote && Date.now() < memoriaNote.until) memoriaFlash(memoriaNote.msg, memoriaNote.kind);
+}
+
+// Muestra un aviso debajo de los botones sin redibujar (así no se pierde lo que escribiste).
+function memoriaFlash(msg, kind) {
+  const el = document.getElementById("memMsg");
+  if (!el) return;
+  el.className = "mem-msg " + (kind || "");
+  el.setAttribute("role", kind === "err" ? "alert" : "status");
+  el.textContent = msg;
+}
+
+function memoriaConnectHtml(st) {
+  const revoked = st.revoked
+    ? `<div class="mem-line"><span class="mem-dot bad"></span><div class="mem-msg err">${escHtml(st.error)}</div></div>` : "";
+  const compus = escAttr(st.url + "/compus");
+  return `${revoked}
+    <div class="mem-state">Mandá tus notas a <b>Memoria</b>, el server de casa que junta las de todas tus Macs para buscarlas en un solo lugar. Va solo el texto: <b>el audio nunca sale de esta Mac</b>.</div>
+    <label class="fld">
+      <span>Código de conexión</span>
+      <input id="memCode" class="mem-code" type="text" inputmode="numeric" autocomplete="off"
+             placeholder="1234 5678" maxlength="12" onkeydown="if(event.key==='Enter'){event.preventDefault();memoriaPair();}" />
+    </label>
+    <div class="test-hint">Lo creás en <a href="${compus}" target="_blank" rel="noopener">Memoria → Compus</a> con «Conectar una compu». Ahí elegís el nombre de esta Mac y en qué carpeta caen sus notas. Sirve por 15 minutos.</div>
+    <details class="mem-more">
+      <summary>Otra dirección del server</summary>
+      <label class="fld">
+        <span>Dirección</span>
+        <input id="memUrl" type="text" autocomplete="off" value="${escAttr(st.url)}" placeholder="memoria.local" />
+      </label>
+      <div class="test-hint">Casi nunca hace falta cambiarla. En casa es <code>memoria.local</code>.</div>
+    </details>
+    <div class="test-row"><button id="memPairBtn" class="regen-btn" onclick="memoriaPair()">Conectar esta Mac</button></div>`;
+}
+
+function memoriaWhen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso), now = new Date();
+  const hm = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  if (d.toDateString() === now.toDateString()) return "hoy a las " + hm;
+  return d.toLocaleDateString("es-AR", { day: "numeric", month: "long" }) + " a las " + hm;
+}
+
+function memoriaStatusHtml(st) {
+  const carpeta = st.ambito === "trabajo" ? "Trabajo" : (st.ambito === "personal" ? "Personal" : "");
+  const who = `Conectada como <b>${escHtml(st.device || "esta Mac")}</b>${carpeta ? ` · sus notas van a la carpeta <b>${carpeta}</b>` : ""}.`;
+  const n = st.pending, notas = n === 1 ? "1 nota" : `${n} notas`;
+  let dot = "ok", line;
+  if (st.error && st.offline) {
+    dot = "wait";
+    line = n > 0 ? `${notas} esperando. ${escHtml(st.error)}` : escHtml(st.error);
+  } else if (st.error) {
+    dot = "bad"; line = escHtml(st.error) + (n > 0 ? ` Quedan ${notas} esperando.` : "");
+  } else if (n > 0) {
+    dot = "wait"; line = `Mandando ${notas}…`;
+  } else if (st.last_ok) {
+    line = `Todo mandado. Última vez: ${memoriaWhen(st.last_ok)}.`;
+  } else {
+    dot = "wait"; line = "Revisando qué falta mandar…";
+  }
+  const rejected = st.rejected > 0
+    ? `<div class="mem-line"><span class="mem-dot bad"></span><div class="mem-msg">${st.rejected === 1 ? "1 nota no la aceptó" : `${st.rejected} notas no las aceptó`} el server${st.rejected_reason ? `: ${escHtml(st.rejected_reason)}` : "."} Si la editás, se vuelve a intentar.</div></div>` : "";
+  return `
+    <div class="mem-state">${who} Cada nota nueva o editada se manda sola (solo el texto, nunca el audio).</div>
+    <div class="mem-line"><span class="mem-dot ${dot}"></span><div class="mem-msg">${line}</div></div>
+    ${rejected}
+    <div class="test-row">
+      <a class="edit-btn" href="${escAttr(st.url)}" target="_blank" rel="noopener">Abrir Memoria ↗</a>
+      <button class="edit-btn" onclick="memoriaSync()">Mandar ahora</button>
+      <button class="edit-btn danger" onclick="memoriaDisconnect()">Desconectar</button>
+    </div>`;
+}
+
+async function memoriaPair() {
+  const code = (document.getElementById("memCode").value || "").replace(/\D/g, "");
+  const urlEl = document.getElementById("memUrl");
+  if (code.length !== 8) {
+    memoriaFlash("El código tiene 8 números. Lo ves en Memoria → Compus → «Conectar una compu».", "err");
+    document.getElementById("memCode").focus();
+    return;
+  }
+  const btn = document.getElementById("memPairBtn");
+  btn.disabled = true; btn.textContent = "Conectando…";
+  memoriaFlash("");
+  let r, d = {};
+  try {
+    r = await fetch("/api/memoria/pair", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, url: urlEl ? urlEl.value.trim() : "" }),
+    });
+    d = await r.json();
+  } catch (e) { d = { error: "No pude hablar con Muesli. Probá de nuevo." }; }
+  if (r && r.ok) {
+    await loadMemoria("✓ Listo: esta Mac ya está conectada. Ahora se mandan tus notas (las que ya tenías también).", "ok");
+    loadHealth();
+  } else {
+    btn.disabled = false; btn.textContent = "Conectar esta Mac";
+    memoriaFlash(d.error || "No se pudo conectar.", "err");
+  }
+}
+
+async function memoriaSync() {
+  try { await fetch("/api/memoria/sync", { method: "POST" }); } catch (e) {}
+  setTimeout(() => loadMemoria(), 600);
+}
+
+async function memoriaDisconnect() {
+  if (!confirm("¿Desconectar esta Mac del server de casa?\n\nDeja de mandar notas. Las que ya están en Memoria quedan ahí, y las de esta Mac no se tocan.")) return;
+  try { await fetch("/api/memoria/disconnect", { method: "POST" }); } catch (e) {}
+  await loadMemoria("Listo: esta Mac ya no manda notas al server de casa.", "ok");
+  loadHealth();
+}
 
 async function saveSettings() {
   const modelSel = document.getElementById("setClaude").value;
@@ -2067,6 +2226,7 @@ function setupHtml(h, withDismiss) {
     <ul class="checklist">
       ${captureItems}
       ${checkItem(h.api_key, "API key de Claude configurada", 'Pegá tu ANTHROPIC_API_KEY en ⚙ Configuración (o en el .env).')}
+      ${checkItem(h.memoria, "Server de casa conectado", 'Para juntar las notas de todas tus Macs: ⚙ Configuración → Server de casa.', true)}
       ${checkItem(h.notion, "Notion conectado", 'Cargá tu API key y database ID de Notion en ⚙ Configuración.', true)}
     </ul>
     ${withDismiss ? '<div class="setup-actions"><button class="regen-btn" onclick="openSettings()">⚙ Abrir Configuración</button></div>' : ''}`;

@@ -450,6 +450,27 @@ directo a la página creada.
 
 ---
 
+## Server de casa: Memoria (opcional)
+
+Si tenés **Memoria** corriendo en un server de tu casa, Muesli le manda cada nota
+para juntar las de todas tus Macs en un solo lugar (buscador, vault de Obsidian).
+
+1. En Memoria → **Compus** → «Conectar una compu», poné el nombre de esta Mac y la
+   carpeta donde caen sus notas (Personal o Trabajo). Te da un **código de 8 números**
+   que sirve 15 minutos.
+2. En Muesli → ⚙ **Configuración** → **Server de casa**, pegá el código y tocá
+   «Conectar esta Mac». Se mandan también las notas que ya tenías.
+
+Qué viaja: solo texto (título, resumen, tus notas, transcripción, momentos clave).
+**El audio nunca sale de la Mac**, y los resúmenes semanales no se mandan.
+
+Cada nota nueva, editada o borrada se manda sola (`server_sync.py`). Si estás fuera
+de casa o el server está apagado, queda en una cola y se manda cuando vuelve a estar
+a mano. Las borradas van a la papelera de Memoria. «Desconectar» deja de mandar y
+saca la Mac de la lista de Memoria; lo que ya está allá queda.
+
+---
+
 ## Solución de problemas
 
 **No graba el audio del sistema / la grabación sale en silencio**
@@ -503,7 +524,8 @@ Esas propiedades solo se llenan si existen en la base con el nombre exacto
 ## Privacidad
 El audio se procesa **en local** con Whisper; no se sube a ningún lado. Solo el
 texto (transcripción + tus notas) va a la API de Claude para el resumen, y —si
-activás la integración— el resumen se envía a tu Notion. Avisá a los
+activás la integración— el resumen se envía a tu Notion, y la nota en texto a tu
+server de casa (Memoria) si conectaste la Mac. Avisá a los
 participantes que estás tomando notas con asistencia de IA.
 
 ---

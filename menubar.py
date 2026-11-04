@@ -28,6 +28,7 @@ import rumps
 import app as flask_app  # importa la app Flask (no la arranca: eso pasa en start_flask)
 import call_detect
 import config
+import server_sync
 
 BASE = "http://127.0.0.1:5001"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -152,6 +153,7 @@ def notify(title, text):
 
 
 def start_flask():
+    server_sync.start()  # manda las charlas a Memoria (el server de casa), si esta Mac está conectada
     flask_app.app.run(host="127.0.0.1", port=5001, debug=False,
                       use_reloader=False, threaded=True)
 
