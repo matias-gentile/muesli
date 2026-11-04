@@ -14,6 +14,11 @@ on:
 permissions:
   contents: read
 
+# Un push nuevo a un PR cancela el armado anterior de ese PR (los tags nunca se cancelan).
+concurrency:
+  group: armar-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   armar:
     name: Mac ${{ matrix.chip }}

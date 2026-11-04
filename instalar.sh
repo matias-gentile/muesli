@@ -59,7 +59,8 @@ UPDATING=0
 rm -rf "$DEST/Muesli.app"
 mv "$TMP/app/Muesli.app" "$DEST/Muesli.app"
 # Bajada con curl no queda en cuarentena, pero por las dudas: así macOS no la frena por no venir del App Store.
-xattr -dr com.apple.quarantine "$DEST/Muesli.app" 2>/dev/null || true
+# (/usr/bin/xattr fijo: algunos Python instalan otro «xattr» que no entiende -r.)
+/usr/bin/xattr -dr com.apple.quarantine "$DEST/Muesli.app" >/dev/null 2>&1 || true
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$DEST/Muesli.app/Contents/Info.plist" 2>/dev/null || echo "?")"
 
 open "$DEST/Muesli.app"
