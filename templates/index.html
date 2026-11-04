@@ -720,14 +720,12 @@
         <label class="fld">
           <span>Modelo de Claude (resúmenes)</span>
           <select id="setClaude" onchange="onModelChange()">
-            <option value="claude-haiku-4-5">Haiku 4.5 — el más barato y rápido · $1/$5 por millón</option>
-            <option value="claude-sonnet-4-6">Sonnet 4.6 — equilibrado (recomendado) · $3/$15</option>
-            <option value="claude-opus-4-8">Opus 4.8 — el más potente y caro · $5/$25</option>
-            <option value="__custom__">Personalizado…</option>
+            {% for m in modelos %}<option value="{{ m.id }}">{{ m.nombre }} — {{ m.pista }} · {{ m.precio }}{% if loop.first %} por millón{% endif %}</option>
+            {% endfor %}            <option value="__custom__">Personalizado…</option>
           </select>
         </label>
         <input id="setClaudeCustom" type="text" placeholder="claude-… (ID exacto del modelo)" style="display:none" />
-        <div class="test-hint">Precios por millón de tokens (entrada/salida), aprox. junio 2026. Más barato = más rápido; más caro = más capaz. Para resúmenes de reuniones, Sonnet suele ser el mejor equilibrio.</div>
+        <div class="test-hint">Precios por millón de tokens (entrada / salida), octubre 2026. Más barato = más rápido; más caro = más capaz. Para resúmenes de reuniones, Sonnet suele ser el mejor equilibrio.</div>
         <label class="fld">
           <span>Modelo de Whisper (transcripción)</span>
           <select id="setWhisper" onchange="onWhisperChange()">
@@ -1702,11 +1700,12 @@ const REGEN_DETAILS = [
   { key: "normal", label: "Normal" },
   { key: "extenso", label: "Extenso" },
 ];
-const REGEN_MODELS = [
-  { key: "claude-haiku-4-5", label: "Haiku", hint: "más barato y rápido" },
-  { key: "claude-sonnet-4-6", label: "Sonnet", hint: "equilibrado" },
-  { key: "claude-opus-4-8", label: "Opus", hint: "el más capaz y caro" },
-];
+// La lista de modelos sale de modelos.py (la pasa el server al armar la página).
+const MODELOS = {{ modelos|tojson }};
+const MODELO_POR_DEFECTO = {{ modelo_por_defecto|tojson }};
+const MODELOS_ANTERIORES = {{ modelos_anteriores|tojson }};
+const modeloActual = id => MODELOS_ANTERIORES[id] || id;  // uno de antes → el mismo nivel, generación actual
+const REGEN_MODELS = MODELOS.map(m => ({ key: m.id, label: m.corto, hint: m.breve }));
 let regenState = { id: null, detail: "normal", model: "", configModel: "", loading: false, error: null };
 
 function regenModelList(configModel) {
@@ -1718,11 +1717,11 @@ function regenModelList(configModel) {
 }
 
 async function openRegen(id) {
-  let configModel = "claude-sonnet-4-6";
+  let configModel = MODELO_POR_DEFECTO;
   try { configModel = (await (await fetch("/api/settings")).json()).CLAUDE_MODEL || configModel; } catch (e) {}
   let detail = "normal", model = "";
   try { detail = localStorage.getItem("muesli-regen-detail") || "normal"; } catch (e) {}
-  try { model = localStorage.getItem("muesli-regen-model") || ""; } catch (e) {}
+  try { model = modeloActual(localStorage.getItem("muesli-regen-model") || ""); } catch (e) {}
   regenState = { id, detail, model: model || configModel, configModel, loading: false, error: null };
   renderRegen();
 }
@@ -1796,11 +1795,11 @@ function weeklyInRangeCount() {
 async function openWeekly() {
   if (recording) { setStatus("Esperá a que termine la grabación para generar el resumen semanal."); return; }
   activeId = null;
-  let configModel = "claude-sonnet-4-6";
+  let configModel = MODELO_POR_DEFECTO;
   try { configModel = (await (await fetch("/api/settings")).json()).CLAUDE_MODEL || configModel; } catch (e) {}
   let detail = "normal", model = "";
   try { detail = localStorage.getItem("muesli-regen-detail") || "normal"; } catch (e) {}
-  try { model = localStorage.getItem("muesli-regen-model") || ""; } catch (e) {}
+  try { model = modeloActual(localStorage.getItem("muesli-regen-model") || ""); } catch (e) {}
   weeklyState = { detail, model: model || configModel, configModel, loading: false, error: null };
   renderWeekly();
   showNoteView();
@@ -1922,8 +1921,8 @@ async function openSettings() {
   document.getElementById("setKey").placeholder =
     s.ANTHROPIC_API_KEY_set ? "•••••• configurada — vacío = no cambiar" : "pegá tu sk-ant-… acá";
   // Modelo: si coincide con una opción conocida la seleccionamos; si no, "Personalizado".
-  const model = s.CLAUDE_MODEL || "claude-sonnet-4-6";
-  const known = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"];
+  const model = s.CLAUDE_MODEL || MODELO_POR_DEFECTO;
+  const known = MODELOS.map(m => m.id);
   if (known.includes(model)) {
     document.getElementById("setClaude").value = model;
     document.getElementById("setClaudeCustom").value = "";

@@ -8,18 +8,10 @@ gasta con Muesli, mes a mes.
 import datetime
 import sqlite3
 
+import modelos
 from config import DB_PATH
 
-# Precio por millón de tokens (USD): (entrada, salida). Aprox. junio 2026.
-PRICING = {
-    "claude-haiku-4-5": (1.0, 5.0),
-    "claude-haiku-4-5-20251001": (1.0, 5.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-sonnet-4-5-20250929": (3.0, 15.0),
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0),
-    "claude-opus-4-6": (5.0, 25.0),
-}
+# Los precios viven en modelos.py (junto con la lista de modelos).
 
 
 def _conn():
@@ -33,8 +25,9 @@ def _conn():
 
 
 def cost_of(model, inp, out):
-    """Costo en USD, o None si no conocemos el precio de ese modelo."""
-    p = PRICING.get(model)
+    """Costo en USD de UNA llamada, o None si no conocemos el precio de ese modelo.
+    Va por llamada porque Haiku 5.5 cobra distinto según el largo de cada pedido."""
+    p = modelos.precio(model, inp)
     if not p:
         return None
     return inp / 1_000_000 * p[0] + out / 1_000_000 * p[1]
@@ -59,12 +52,20 @@ def record(model, input_tokens, output_tokens, kind="asistente"):
 
 
 def record_response(model, resp, kind="asistente"):
-    """Registra el uso a partir de una respuesta del SDK de Anthropic."""
+    """Registra el uso a partir de una respuesta del SDK de Anthropic. `model`: el que se pidió.
+    Si la API reintentó en otro modelo (rechazo de seguridad), cada intento viene en usage.iterations
+    con su modelo y se cobra a la tarifa de ese."""
     try:
         u = getattr(resp, "usage", None)
         if u is None:
             return
-        record(model, getattr(u, "input_tokens", 0) or 0,
+        intentos = getattr(u, "iterations", None) or []
+        if intentos:
+            for it in intentos:
+                record(getattr(it, "model", None) or model, getattr(it, "input_tokens", 0) or 0,
+                       getattr(it, "output_tokens", 0) or 0, kind)
+            return
+        record(getattr(resp, "model", None) or model, getattr(u, "input_tokens", 0) or 0,
                getattr(u, "output_tokens", 0) or 0, kind)
     except Exception:
         pass
@@ -74,14 +75,19 @@ def _bucket(rows):
     """Agrega filas (model, input, output) por modelo y calcula el costo total."""
     by_model = {}
     for model, inp, out in rows:
-        d = by_model.setdefault(model, {"input": 0, "output": 0, "calls": 0})
+        d = by_model.setdefault(model, {"input": 0, "output": 0, "calls": 0, "cost": 0.0, "unknown": False})
         d["input"] += inp
         d["output"] += out
         d["calls"] += 1
+        c = cost_of(model, inp, out)
+        if c is None:
+            d["unknown"] = True
+        else:
+            d["cost"] += c
     total_cost, total_in, total_out, calls, unknown = 0.0, 0, 0, 0, False
     models = []
     for model, d in sorted(by_model.items(), key=lambda kv: -(kv[1]["input"] + kv[1]["output"])):
-        cst = cost_of(model, d["input"], d["output"])
+        cst = None if d["unknown"] else d["cost"]
         if cst is None:
             unknown = True
         total_cost += (cst or 0.0)

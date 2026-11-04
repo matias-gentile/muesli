@@ -385,6 +385,9 @@ justo ahí se corta la conexión, **no perdés la grabación**:
   el **nivel de detalle** (corto / normal / **extenso**, para charlas largas que ameritan un
   resumen más completo) y el **modelo** (Haiku / Sonnet / Opus) solo para esa regeneración.
   La llamada reintenta sola ante cortes breves.
+- Muy de vez en cuando los **filtros de seguridad de Claude** frenan una charla aunque no tenga
+  nada de malo. Con Sonnet y Opus la API la reintenta sola en otro modelo; si igual no sale, la
+  nota lo avisa y podés regenerarla eligiendo otro modelo.
 
 > ### Resumen semanal (on-demand)
 > El botón **📅 Resumen semanal** (abajo a la izquierda) junta los resúmenes de tus reuniones
@@ -437,7 +440,7 @@ justo ahí se corta la conexión, **no perdés la grabación**:
 | Variable | Para qué |
 |---|---|
 | `ANTHROPIC_API_KEY` | Tu clave de la API de Claude |
-| `CLAUDE_MODEL` | `claude-sonnet-4-6` (recomendado), `claude-opus-4-8` (+calidad), `claude-haiku-4-5-20251001` (+barato) |
+| `CLAUDE_MODEL` | `claude-sonnet-5-5` (recomendado), `claude-opus-5-5` (+calidad), `claude-haiku-5-5` (+barato). Si tenías uno de antes (4.5 / 4.6 / 4.8), pasa solo al mismo nivel de la generación actual. La lista y los precios están en `modelos.py` |
 | `WHISPER_MODEL` | `tiny` · `base` · `small` · `medium` · `large-v3` · `large-v3-turbo` (rápido y multilingüe) · `distil-large-v3` (destilado, afinado para inglés). También acepta un repo de Hugging Face en formato CTranslate2 (ej. `Systran/faster-distil-whisper-large-v3`) o una ruta local. Más grande = más preciso y lento |
 | `WHISPER_VAD` | `0` (off, más permisivo con audio bajo) o `1` (descarta silencios) |
 | `CAPTURE_BACKEND` | `screencapturekit` (por defecto, sin Audio MIDI). `blackhole` es un backend heredado que no aparece en la interfaz y requiere libs de audio + Audio MIDI |

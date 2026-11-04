@@ -17,6 +17,7 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request, send_file, send_from_directory
 
 import config
+import modelos
 import notion_sync
 import server_sync
 import storage
@@ -76,7 +77,8 @@ def _auto_stop_monitor(rec):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", modelos=modelos.MODELOS, modelo_por_defecto=modelos.POR_DEFECTO,
+                           modelos_anteriores=modelos.ANTERIORES)
 
 
 @app.route("/favicon.png")
@@ -339,11 +341,7 @@ def resummarize(note_id):
     detail = data.get("detail", "normal")
     if detail not in ("corto", "normal", "extenso"):
         detail = "normal"
-    # Modelo: aceptamos solo conocidos o el configurado; cualquier otra cosa cae al default.
-    model = data.get("model") or None
-    allowed = {"claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8", config.get("CLAUDE_MODEL")}
-    if model and model not in allowed:
-        model = None
+    model = _modelo_pedido(data)
     try:
         summary = summarize(transcript, n.get("manual_notes", ""), n.get("title", ""), ctype, "",
                             detail=detail, model=model)
@@ -352,6 +350,16 @@ def resummarize(note_id):
 
     storage.update_summary(note_id, summary)
     return jsonify({"summary": summary, "id": note_id})
+
+
+def _modelo_pedido(data):
+    """El modelo que eligió la persona en «Regenerar»: uno de los de Configuración o el suyo propio.
+    Cualquier otra cosa (o nada) usa el configurado."""
+    model = data.get("model")
+    if not model:
+        return None
+    model = modelos.actualizar(model)
+    return model if model in set(modelos.IDS) | {config.get("CLAUDE_MODEL")} else None
 
 
 @app.route("/api/weekly", methods=["POST"])
@@ -368,10 +376,7 @@ def weekly():
     detail = data.get("detail", "normal")
     if detail not in ("corto", "normal", "extenso"):
         detail = "normal"
-    model = data.get("model") or None
-    allowed = {"claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8", config.get("CLAUDE_MODEL")}
-    if model and model not in allowed:
-        model = None
+    model = _modelo_pedido(data)
     try:
         digest = weekly_digest(notes, detail=detail, model=model)
     except Exception as e:

@@ -15,6 +15,7 @@ import wave
 
 import notion_sync
 import storage
+import claude
 import config
 from summarize import summarize, type_label
 from transcribe import transcribe_segments
@@ -147,6 +148,9 @@ class Session:
             try:
                 summary = summarize(transcript, self.manual_notes, self.title,
                                     self.context_type, self.context)
+            except claude.ClaudeRechazo as e:  # no es un corte: avisamos tal cual y con qué hacer
+                summary_error = str(e)
+                summary = f"_{e} La transcripción está guardada; abrí la nota y tocá «↻ Regenerar»._"
             except Exception as e:
                 summary_error = str(e)
                 summary = (f"_El resumen automático falló ({e}). La transcripción está "
