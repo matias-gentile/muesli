@@ -276,6 +276,16 @@ class MuesliBar(rumps.App):
         self.timer = rumps.Timer(self.tick, ACTIVE_INTERVAL)
         self.timer.start()
 
+        # Recién instalada (sin la clave de Claude): abrí el panel solo, así se ve la lista de bienvenida
+        # sin tener que encontrar el ícono en la barra.
+        if not config.get("ANTHROPIC_API_KEY"):
+            self._welcome_timer = rumps.Timer(self._open_welcome, 1)
+            self._welcome_timer.start()
+
+    def _open_welcome(self, timer):
+        timer.stop()
+        self.open_panel(None)
+
     # ---- modo de audio ----
     def set_mode_full(self, _):
         self.mode = "full"

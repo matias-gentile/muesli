@@ -1,0 +1,81 @@
+# Arma Muesli.app para las dos clases de Mac (chip Apple e Intel).
+#  - En cada PR (y a mano desde la pestaña Actions): solo arma, para ver que no se rompió. Los .zip quedan una semana
+#    como artefactos de la corrida.
+#  - Al subir un tag vX.Y.Z: además publica la versión en Releases, de donde la baja instalar.sh.
+# Para publicar una versión:  git tag v1.2.0 && git push origin v1.2.0
+name: Armar la app
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  armar:
+    name: Mac ${{ matrix.chip }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            chip: chip-Apple
+          - runner: macos-15-intel
+            chip: Intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Python y dependencias
+        # El Python de uv (python-build-standalone) pide macOS 10.15: no sube el mínimo de la app.
+        run: |
+          uv venv .venv --python 3.12 --python-preference only-managed
+          uv pip install --python .venv/bin/python -r requirements.txt "pyinstaller>=6.10,<7"
+
+      - name: Armar
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.0"; fi
+          ./build_release.sh "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Muesli-Mac-${{ matrix.chip }}
+          path: dist/Muesli-Mac-${{ matrix.chip }}.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar la versión
+    if: github.ref_type == 'tag'
+    needs: armar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Crear la versión en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notas.md <<'EOF'
+          **Instalar o actualizar:** abrí la app Terminal en la Mac y pegá
+
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/matias-gentile/muesli/main/instalar.sh | bash
+          ```
+
+          Elige sola la versión para tu Mac (chip Apple o Intel). Necesita macOS 14 (Sonoma) o más nuevo.
+          Si preferís bajarla a mano, mirá «Instalar en una Mac» en el README.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --repo "$GITHUB_REPOSITORY" \
+            --title "Muesli ${GITHUB_REF_NAME#v}" --notes-file notas.md

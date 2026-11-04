@@ -11,7 +11,15 @@
 #   BlackHole/PortAudio: sounddevice/soundfile quedan excluidos).
 # - faster-whisper baja el modelo de Whisper la primera vez que transcribís (necesita red).
 
+import os
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+# Los pasa build_release.sh: la versión (la del tag en GitHub) y el ícono armado con iconutil.
+VERSION = os.environ.get('MUESLI_VERSION') or '0.0.0'
+ICON = os.environ.get('MUESLI_ICON') or 'assets/icon.icns'
+# numpy y onnxruntime (chip Apple) ya piden macOS 14; build_release.sh revisa que nada pida más.
+MIN_MACOS = os.environ.get('MUESLI_MIN_MACOS') or '14.0'
 
 datas = [
     ('templates', 'templates'),
@@ -94,7 +102,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='Muesli.app',
-    icon='assets/icon.icns',
+    icon=ICON,
     bundle_identifier='com.matiasgentile.muesli',
     info_plist={
         'LSUIElement': True,   # app de barra de menú (sin ícono en el Dock)
@@ -102,8 +110,9 @@ app = BUNDLE(
             'Muesli usa el micrófono para grabar y transcribir tus reuniones.',
         'NSScreenCaptureUsageDescription':
             'Muesli captura el audio del sistema para transcribir tus reuniones.',
-        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleShortVersionString': VERSION,
+        'CFBundleVersion': VERSION,
         'CFBundleName': 'Muesli',
-        'LSMinimumSystemVersion': '13.0',
+        'LSMinimumSystemVersion': MIN_MACOS,
     },
 )
