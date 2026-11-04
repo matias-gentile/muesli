@@ -59,10 +59,19 @@ _DEFAULTS = {
     "CALL_DETECT": os.getenv("CALL_DETECT", "1"),
     "NOTION_API_KEY": os.getenv("NOTION_API_KEY", ""),
     "NOTION_DATABASE_ID": os.getenv("NOTION_DATABASE_ID", ""),
+    # Memoria, el server de casa que junta las charlas de todas las Macs (ver server_sync.py).
+    # Se conectan desde Configuración → «Server de casa» con un código; no se editan a mano.
+    "MEMORIA_URL": os.getenv("MEMORIA_URL", ""),
+    "MEMORIA_TOKEN": os.getenv("MEMORIA_TOKEN", ""),
+    "MEMORIA_DEVICE": "",   # nombre de esta Mac en Memoria
+    "MEMORIA_AMBITO": "",   # carpeta donde caen sus charlas: personal o trabajo
 }
 
 # Claves que son secretos (no se devuelven en claro al frontend).
-SECRET_KEYS = {"ANTHROPIC_API_KEY", "NOTION_API_KEY"}
+SECRET_KEYS = {"ANTHROPIC_API_KEY", "NOTION_API_KEY", "MEMORIA_TOKEN"}
+
+# Claves que maneja la propia app (server_sync), no el formulario de Configuración.
+MANAGED_KEYS = {"MEMORIA_URL", "MEMORIA_TOKEN", "MEMORIA_DEVICE", "MEMORIA_AMBITO"}
 
 _overrides = {}
 if SETTINGS_PATH.exists():
@@ -99,19 +108,35 @@ def get_float(key, default=0.0):
 
 
 def get_all():
-    return {k: get(k) for k in _DEFAULTS}
+    return {k: get(k) for k in _DEFAULTS if k not in MANAGED_KEYS}
 
 
-def update(new: dict):
-    """Guarda en settings.json solo las claves conocidas (ignora secretos vacíos)."""
+def _save():
+    SETTINGS_PATH.write_text(json.dumps(_overrides, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        SETTINGS_PATH.chmod(0o600)  # tiene claves: que solo lo lea tu usuario
+    except OSError:
+        pass
+
+
+def update(new: dict, managed: bool = False):
+    """Guarda en settings.json solo las claves conocidas (ignora secretos vacíos).
+    Las de MANAGED_KEYS solo se guardan si las manda la propia app (managed=True)."""
     for k, v in new.items():
-        if k not in _DEFAULTS:
+        if k not in _DEFAULTS or (k in MANAGED_KEYS and not managed):
             continue
         # No pisar un secreto ya configurado con un valor vacío.
         if k in SECRET_KEYS and (v is None or str(v).strip() == ""):
             continue
         _overrides[k] = v
-    SETTINGS_PATH.write_text(json.dumps(_overrides, indent=2, ensure_ascii=False), encoding="utf-8")
+    _save()
+
+
+def clear(keys):
+    """Borra claves de settings.json (vuelven a su valor por defecto)."""
+    for k in keys:
+        _overrides.pop(k, None)
+    _save()
 
 
 # --- Constantes de compatibilidad (valor inicial; para live usar config.get()). ---
