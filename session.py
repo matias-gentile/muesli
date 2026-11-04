@@ -131,7 +131,11 @@ class Session:
             ).strip()
 
             if not transcript:
-                if self.peak < 0.001:
+                if self.peak < 0.001 and config.get("CAPTURE_BACKEND") == "screencapturekit":
+                    self._set(status="error", error=(
+                        "No entró nada de sonido: la grabación quedó en silencio. Fijate que la reunión "
+                        "suene en esta Mac (no en el teléfono) y volvé a probar."))
+                elif self.peak < 0.001:
                     self._set(status="error", error=(
                         "No se detectó audio (nivel ≈ 0). Poné la salida del sistema en "
                         "un Multi-Output Device que incluya BlackHole y volvé a probar."))

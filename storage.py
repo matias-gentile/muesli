@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import sqlite3
+import threading
 import uuid as uuidlib
 from pathlib import Path
 
@@ -13,9 +14,25 @@ from config import NOTES_DIR, DB_PATH, RECORDINGS_DIR
 # Lo apunta server_sync.start(): se llama cuando una nota cambia, para mandarla enseguida a Memoria.
 on_change = None
 
+# La base se prepara (tablas y columnas nuevas) una sola vez por arranque. Con un candado: al abrir el panel
+# llegan varios pedidos juntos y, con una base recién creada, dos querían agregar la misma columna a la vez
+# («duplicate column name») y uno fallaba.
+_schema_lock = threading.Lock()
+_schema_ok = False
+
 
 def _conn():
+    global _schema_ok
     c = sqlite3.connect(DB_PATH)
+    if not _schema_ok:
+        with _schema_lock:
+            if not _schema_ok:
+                _prepare(c)
+                _schema_ok = True
+    return c
+
+
+def _prepare(c):
     c.execute(
         """CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +93,6 @@ def _conn():
         )"""
     )
     c.commit()
-    return c
 
 
 def _started_at(audio_dir, created, chunk_map) -> str:

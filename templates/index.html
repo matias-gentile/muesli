@@ -249,6 +249,9 @@
   .chk-label{font-size:14px; font-weight:500;}
   .chk-hint{font-size:12px; color:var(--text-dim); margin-top:2px;}
   .setup-actions{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  .perm-why{font-size:14px; color:var(--text-dim); margin-bottom:10px;}
+  .perm-steps{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px; font-size:14px;}
+  .problem-card .chk-hint{margin-top:10px;}
   #settingsHealth:not(:empty){
     margin-bottom:4px; padding-bottom:14px; border-bottom:1px solid var(--border-soft);
   }
@@ -653,6 +656,7 @@
   </aside>
 
   <main>
+    <div id="problemCard" class="setup-banner problem-card" style="display:none"></div>
     <div id="setupBanner" class="setup-banner" style="display:none"></div>
 
     <div id="composer" class="composer">
@@ -847,6 +851,11 @@ let allNotes = [], templateLabels = {};  // cache de la lista + value->label de 
 let deviceList = [];  // dispositivos de entrada (para el panel de Configuración)
 let paused = false, pausedMs = 0, pauseStart = 0;  // estado de pausa
 let bannerDismissed = false;  // checklist de bienvenida ocultado en esta sesión
+let starting = false;         // esperando que /api/start confirme (tarda ~1 s)
+let statusLoop = false;       // pollStatus está siguiendo un procesado
+let problemShown = null;      // qué muestra la tarjeta de arriba: "permiso", el texto de un error, o null
+let problemDismissed = null;  // el último error que cerraste con ✕ (no lo vuelvas a mostrar)
+let lastDoneNote;             // id de la última nota terminada que vimos (undefined = todavía no miramos)
 
 document.querySelectorAll("#audioMode .seg-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -941,16 +950,45 @@ async function toggle() {
 }
 
 async function start() {
+  if (starting) return;
+  starting = true;
+  const btn = document.getElementById("recBtn");
+  btn.disabled = true;
   setStatus("Iniciando grabación…", true);
-  const r = await fetch("/api/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: audioMode }),
-  });
-  const data = await r.json();
-  if (data.error) { setStatus("⚠️ " + data.error); return; }
+  let data;
+  try {
+    const r = await fetch("/api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: audioMode }),
+    });
+    data = await r.json();
+  } catch (e) {
+    data = { error: "No pude hablar con Muesli. Probá de nuevo." };
+  } finally {
+    starting = false;
+    btn.disabled = false;
+  }
+  if (data.error) {
+    setStatus("");
+    if (data.permiso) showProblemCard("permiso");
+    else showProblemCard(data.error);
+    return;
+  }
+  hideProblemCard();
+  enterRecordingUI(data.backend, Date.now());
+}
+
+// Pone la pantalla en modo «grabando». También sirve para una grabación que se empezó desde la barra de
+// menú (o el aviso de llamada) con el panel cerrado: `since` es cuándo arrancó, para que el contador siga.
+function enterRecordingUI(backend, since, mode) {
+  problemDismissed = null;   // grabación nueva: si vuelve a fallar, que se vea aunque sea el mismo aviso
+  if (mode && mode !== audioMode) {   // empezada desde la barra con otra fuente: mostrá la de verdad
+    audioMode = mode;
+    document.querySelectorAll("#audioMode .seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  }
   // ScreenCaptureKit no soporta pausa todavía: ocultá el botón en ese modo.
-  captureBackend = data.backend || "blackhole";
+  captureBackend = backend || "blackhole";
   const pb = document.getElementById("pauseBtn");
   if (pb) pb.style.display = (captureBackend === "screencapturekit") ? "none" : "";
   // Asegurá la vista de compositor (con el panel en vivo y el botón Detener).
@@ -961,7 +999,8 @@ async function start() {
   setModeEnabled(false);
   paused = false; pausedMs = 0; pauseStart = 0;
   updatePauseBtn();
-  t0 = Date.now();
+  t0 = since || Date.now();
+  clearInterval(timerId);
   timerId = setInterval(tick, 1000); tick();
   startLiveMeter();
   const btn = document.getElementById("recBtn");
@@ -1002,13 +1041,14 @@ async function stop() {
   pollStatus();
 }
 
-async function pollStatus() {
+async function pollStatus(keepComposer = false) {
+  statusLoop = true;
   let s;
   try {
     const r = await fetch("/api/status");
     s = await r.json();
   } catch (e) {
-    setTimeout(pollStatus, 2000); return;
+    setTimeout(() => pollStatus(keepComposer), 2000); return;
   }
   if (s.status === "transcribing") {
     const tot = s.total_chunks ? ` / ${s.total_chunks}` : "";
@@ -1016,7 +1056,10 @@ async function pollStatus() {
   } else if (s.status === "summarizing") {
     setStatus("Resumiendo con Claude…", true);
   } else if (s.status === "done") {
+    statusLoop = false;
+    lastDoneNote = (s.result.note || {}).id || null;
     finishStop();
+    if (problemShown && problemShown !== "permiso") hideProblemCard();
     setStatus("✓ Listo y guardado.");
     render({
       summary: s.result.summary, transcript: s.result.transcript,
@@ -1033,16 +1076,128 @@ async function pollStatus() {
     await loadList();
     await loadRecoverable();
     loadHealth();
-    clearComposer();
+    if (!keepComposer) clearComposer();
     return;
   } else if (s.status === "error") {
+    statusLoop = false;
     finishStop();
-    setStatus("⚠️ " + s.error);
+    setStatus("");
+    showProblemCard(s.error);
+    return;
+  } else if (s.status === "idle" || s.status === "cancelled") {
+    statusLoop = false;   // no hay nada procesándose
+    finishStop();
+    setStatus("");
     return;
   } else {
     setStatus("Procesando…", true);
   }
-  setTimeout(pollStatus, 1500);
+  setTimeout(() => pollStatus(keepComposer), 1500);
+}
+
+// ---- Lo que pasa fuera del panel (barra de menú, aviso de llamada) ----
+// Cada 3 s mira el estado: si se empezó a grabar desde la barra, el panel lo muestra; si se paró y se está
+// procesando, sigue el progreso; si algo falló (o falta el permiso de macOS), lo muestra acá. Así el
+// «mirá el panel» de la barra siempre tiene algo que mirar.
+async function syncWithServer() {
+  if (recording || statusLoop || starting) return;
+  let s;
+  try { s = await (await fetch("/api/status")).json(); } catch (e) { return; }
+  if (recording || statusLoop || starting) return;   // cambió mientras esperábamos
+  const prob = s.start_problem;
+  const doneId = s.status === "done" ? (((s.result || {}).note || {}).id || null) : null;
+  const firstLook = lastDoneNote === undefined;
+  if (firstLook) lastDoneNote = doneId;
+  if (s.recording) {
+    hideProblemCard();
+    enterRecordingUI(s.backend, s.recording_since ? s.recording_since * 1000 : Date.now(), s.mode);
+    return;
+  }
+  if (s.status === "transcribing" || s.status === "summarizing") {
+    document.getElementById("recBtn").disabled = true;
+    document.getElementById("recLabel").textContent = "Procesando…";
+    pollStatus(true);   // sin borrar lo que estés escribiendo en el grabador
+    return;
+  }
+  // Lo que salió mal, arriba de todo (lo primero que se ve al abrir el panel). El permiso va primero:
+  // es lo que hay que arreglar para poder grabar.
+  const msg = (prob && !prob.permiso) ? prob.message : (s.status === "error" ? s.error : null);
+  if (prob && prob.permiso) showProblemCard("permiso");
+  else if (msg && msg !== problemDismissed) showProblemCard(msg);
+  else if (problemShown === "permiso") hideProblemCard();   // ya grabó bien en otro lado
+  if (!firstLook && doneId && doneId !== lastDoneNote) {
+    lastDoneNote = doneId;
+    loadList();
+    setStatus("✓ Listo y guardado.");
+  }
+}
+
+// ---- Tarjeta de arriba: qué salió mal y qué hacer ----
+// `what` = "permiso" (falta el permiso de grabación de macOS: pasos + botón) o el texto de un error.
+function showProblemCard(what) {
+  const b = document.getElementById("problemCard");
+  if (!b) return;
+  if (problemShown === what && b.style.display !== "none") return;   // ya está: no pises lo que dice
+  problemShown = what;
+  b.innerHTML = what === "permiso" ? permisoHtml() : errorHtml(what);
+  b.style.display = "";
+  b.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function hideProblemCard() {
+  const b = document.getElementById("problemCard");
+  if (b) b.style.display = "none";
+  problemShown = null;
+}
+
+function dismissProblem() {
+  if (problemShown && problemShown !== "permiso") problemDismissed = problemShown;
+  hideProblemCard();
+}
+
+function errorHtml(msg) {
+  const PREFIJO = "No se pudo empezar a grabar: ";
+  const alEmpezar = msg.startsWith(PREFIJO);
+  let detalle = alEmpezar ? msg.slice(PREFIJO.length) : msg;
+  detalle = detalle.charAt(0).toUpperCase() + detalle.slice(1);
+  const titulo = alEmpezar ? "No se pudo empezar a grabar" : "La última grabación no se guardó";
+  return `
+    <button class="banner-x" onclick="dismissProblem()" title="Cerrar">✕</button>
+    <div class="setup-title">⚠️ ${titulo}</div>
+    <div class="perm-why" style="margin-bottom:0">${escHtml(detalle)}</div>`;
+}
+
+function permisoHtml() {
+  return `
+    <div class="setup-title">🔒 Falta un permiso de macOS para grabar</div>
+    <div class="perm-why">macOS no deja que Muesli grabe el audio de la compu. Pasa la primera vez y después de cada actualización de Muesli.</div>
+    <ol class="perm-steps">
+      <li>Tocá <b>Dar permiso</b>. Se abre Ajustes del Sistema (si antes aparece un aviso de macOS, tocá <b>Abrir Ajustes del Sistema</b>).</li>
+      <li>Activá <b>Muesli</b> en <b>Grabación de pantalla y audio del sistema</b>.</li>
+      <li>Cuando macOS pregunte, tocá <b>Salir y volver a abrir</b>. Después grabá de nuevo.</li>
+    </ol>
+    <div class="setup-actions"><button class="regen-btn" id="permBtn" onclick="fixPermission()">Dar permiso</button></div>
+    <div class="chk-hint" id="permNote">¿Muesli ya aparecía activado y te lo sigue pidiendo? Tocá <b>Dar permiso</b> igual: borra el permiso viejo y lo pide de nuevo.</div>`;
+}
+
+async function fixPermission() {
+  const btn = document.getElementById("permBtn");
+  const note = document.getElementById("permNote");
+  btn.disabled = true; btn.textContent = "Abriendo Ajustes…";
+  try {
+    const r = await fetch("/api/permission/fix", { method: "POST" });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || "");
+    btn.textContent = "Dar permiso otra vez";
+    note.innerHTML = "Listo: en Ajustes activá <b>Muesli</b> y tocá <b>Salir y volver a abrir</b>. " +
+      "¿No aparece en la lista? Tocá <b>Dar permiso otra vez</b>.";
+  } catch (e) {
+    btn.textContent = "Dar permiso";
+    note.innerHTML = "No pude abrir Ajustes. Abrilo vos: <b>Ajustes del Sistema → Privacidad y seguridad → " +
+      "Grabación de pantalla y audio del sistema</b>, y activá Muesli.";
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function finishStop() {
@@ -2295,6 +2450,8 @@ loadList();
 loadRecoverable();
 loadHealth();
 updateThemeBtn();
+syncWithServer();
+setInterval(syncWithServer, 3000);
 
 // ---- Tutorial on-demand (botón ❓) + auto la primera vez ----
 const TUTORIAL = [

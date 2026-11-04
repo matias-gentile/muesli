@@ -26,7 +26,8 @@ import assistant
 import usage
 from audio_capture import ChunkedRecorder
 from config import RECORDINGS_DIR
-from screen_capture import ScreenCaptureRecorder
+import screen_capture
+from screen_capture import CaptureError, ScreenCaptureRecorder
 from session import Session
 from summarize import list_templates, summarize, type_label, weekly_digest
 
@@ -41,6 +42,12 @@ app = Flask(__name__, template_folder=_resource("templates"))
 recorder: ChunkedRecorder | None = None
 session: Session | None = None
 auto_stop_reason: str | None = None  # motivo si la última grabación se detuvo sola
+# Si el último «Grabar» no pudo arrancar: {"permiso": bool, "message": str}. El panel lo muestra al abrirse
+# (también cuando se tocó Grabar desde la barra de menú) y se borra en cuanto una grabación arranca bien.
+start_problem: dict | None = None
+recording_since: float | None = None  # cuándo arrancó la grabación en curso (para el contador del panel)
+recording_mode = "full"                # qué se está grabando: "full" (sistema + mic) u "output"
+_start_lock = threading.Lock()  # «Grabar» tarda ~1 s en confirmar: que dos toques seguidos no arranquen dos
 
 
 def _finish_recording(title="", notes="", ctype="reunion", context="", auto_reason=None) -> bool:
@@ -57,7 +64,8 @@ def _finish_recording(title="", notes="", ctype="reunion", context="", auto_reas
 
 def _auto_stop_monitor(rec):
     """Corre en segundo plano mientras se graba: corta sola si hay demasiado silencio
-    seguido, o si se pasa del límite máximo de duración."""
+    seguido, o si se pasa del límite máximo de duración. Si la captura se cae, cierra la sesión."""
+    global start_problem
     silence_limit = config.get_float("AUTO_STOP_SILENCE_MIN", 0) * 60
     max_limit = config.get_int("MAX_RECORDING_MIN", 0) * 60
     started = time.time()
@@ -66,8 +74,15 @@ def _auto_stop_monitor(rec):
         if rec is not recorder or not rec.recording:
             return  # se frenó, o ya hay otra grabación
         reason = None
+        died = getattr(rec, "died", None)
+        if died:
+            # La captura se cayó sola: cerrá la sesión con lo grabado hasta acá (y avisá por qué).
+            if getattr(rec, "permiso_faltante", False):
+                start_problem = {"permiso": True, "message": screen_capture.MENSAJE_PERMISO}
+            _finish_recording(auto_reason=died)
+            return
         if silence_limit and rec.silent_seconds >= silence_limit:
-            reason = f"{silence_limit // 60} min sin audio"
+            reason = f"{int(silence_limit // 60)} min sin audio"
         elif max_limit and (time.time() - started) >= max_limit:
             reason = f"límite de {max_limit // 60} min"
         if reason:
@@ -131,6 +146,15 @@ def reset_usage():
 
 @app.route("/api/start", methods=["POST"])
 def start():
+    if not _start_lock.acquire(blocking=False):
+        return jsonify({"status": "already_recording"})
+    try:
+        return _start()
+    finally:
+        _start_lock.release()
+
+
+def _start():
     global recorder, session
     if recorder is not None and recorder.recording:
         return jsonify({"status": "already_recording"})
@@ -141,7 +165,7 @@ def start():
     device = config.get("AUDIO_DEVICE_OUTPUT_ONLY") if mode == "output" else config.get("AUDIO_DEVICE_NAME")
     backend = config.get("CAPTURE_BACKEND", "blackhole")
 
-    global auto_stop_reason
+    global auto_stop_reason, start_problem, recording_since, recording_mode
     auto_stop_reason = None
     try:
         session = Session()
@@ -157,11 +181,20 @@ def start():
                                        chunk_seconds=chunk_seconds)
         recorder.start()
     except Exception as e:  # dispositivo/binario no encontrado, permisos, etc.
-        return jsonify({"error": str(e)}), 400
+        permiso = isinstance(e, CaptureError) and e.permiso
+        start_problem = {"permiso": permiso, "message": str(e)}
+        recorder = None
+        if session is not None:
+            session.cancel()   # no quedó nada para procesar
+            session = None
+        return jsonify({"error": str(e), "permiso": permiso}), 400
 
-    # Monitor de auto-stop (silencio / duración máxima), si alguno está activo.
-    if config.get_float("AUTO_STOP_SILENCE_MIN", 0) > 0 or config.get_int("MAX_RECORDING_MIN", 0) > 0:
-        threading.Thread(target=_auto_stop_monitor, args=(recorder,), daemon=True).start()
+    start_problem = None
+    recording_since = time.time()
+    recording_mode = mode
+    # Vigila la grabación: corta sola por silencio / duración máxima (si están activos) y, si la captura
+    # se cae en el medio, cierra la sesión con lo que se llegó a grabar.
+    threading.Thread(target=_auto_stop_monitor, args=(recorder,), daemon=True).start()
     return jsonify({"status": "recording", "mode": mode, "backend": backend})
 
 
@@ -207,7 +240,19 @@ def status():
     snap = session.snapshot() if session is not None else {"status": "idle"}
     snap["recording"] = bool(recorder is not None and recorder.recording)
     snap["auto_stop_reason"] = auto_stop_reason
+    snap["start_problem"] = start_problem
+    snap["recording_since"] = recording_since if snap["recording"] else None
+    snap["mode"] = recording_mode
+    snap["backend"] = "screencapturekit" if isinstance(recorder, ScreenCaptureRecorder) else config.get("CAPTURE_BACKEND")
     return jsonify(snap)
+
+
+@app.route("/api/permission/fix", methods=["POST"])
+def permission_fix():
+    """Botón «Dar permiso»: borra el permiso viejo de Muesli, lo vuelve a pedir y abre Ajustes del Sistema."""
+    if not _from_this_app():
+        return jsonify({"error": "No se pudo hacer desde esa página."}), 403
+    return jsonify(screen_capture.pedir_permiso())
 
 
 @app.route("/api/level")

@@ -22,10 +22,13 @@ Prueba rápida (en la Mac, con el helper ya compilado en native/):
 """
 from __future__ import annotations
 
+import collections
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -45,6 +48,31 @@ else:
 
 _LEVEL_RE = re.compile(r"^LEVEL\s+([0-9.]+)")
 _CHUNK_RE = re.compile(r"^CHUNK\s+(\S+)")
+
+# Cuánto esperamos a que el helper confirme que arrancó (READY) antes de dar la grabación por iniciada.
+# Si falta el permiso, el helper se cierra en menos de un segundo; esto es solo el techo.
+START_TIMEOUT = 10.0
+
+# El permiso de macOS que hace falta, con el nombre que se ve en Ajustes del Sistema.
+PERMISO_NOMBRE = "Grabación de pantalla y audio del sistema"
+MENSAJE_PERMISO = ("macOS no deja que Muesli grabe el audio de la compu: le falta el permiso de "
+                   f"«{PERMISO_NOMBRE}». Abrí el panel y tocá «Dar permiso».")
+AJUSTES_PERMISO = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+
+
+class CaptureError(RuntimeError):
+    """La captura no pudo arrancar. `permiso` es True si es porque macOS no le dio el permiso de grabación."""
+
+    def __init__(self, message, permiso=False):
+        super().__init__(message)
+        self.permiso = permiso
+
+
+def _es_falta_de_permiso(line: str) -> bool:
+    """Líneas del helper que dicen que macOS no dejó grabar (antes de arrancar o al iniciar el stream)."""
+    l = line.lower()
+    return (line.startswith("PERMISO: falta") or "no tiene permiso" in l
+            or "-3801" in l or "declined tcc" in l or "user declined" in l)
 
 
 class ScreenCaptureRecorder:
@@ -69,6 +97,12 @@ class ScreenCaptureRecorder:
         self._current_chunk = None   # .wav que el helper está escribiendo ahora
         self._enqueued = 0
         self._last_level_ts = None
+        self._ready = threading.Event()   # el helper dijo READY (está capturando)
+        self._ended = threading.Event()   # el helper terminó (por stop o porque se cayó)
+        self._stopping = False
+        self._log = collections.deque(maxlen=20)  # últimas líneas del helper, para explicar un error
+        self.permiso_faltante = False
+        self.died = None   # motivo si la captura se cortó sola en medio de la grabación
 
     # ---- interfaz tipo ChunkedRecorder ----------------------------------
     def start(self):
@@ -76,7 +110,6 @@ class ScreenCaptureRecorder:
             raise RuntimeError(
                 f"No encuentro el helper de captura en {self.helper_path}. "
                 f"Compilalo con:  cd native && ./build.sh")
-        self.recording = True
         self.silent_seconds = 0.0
         self._last_level_ts = time.time()
         cmd = [str(self.helper_path),
@@ -89,10 +122,25 @@ class ScreenCaptureRecorder:
             text=True, bufsize=1)
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
         self._reader.start()
+        # Esperá a que confirme que arrancó. Si macOS no le da permiso, el helper se cierra enseguida:
+        # mejor avisarlo ahora que dejar el contador corriendo y descubrir al final que no se grabó nada.
+        deadline = time.time() + START_TIMEOUT
+        while time.time() < deadline and not self._ready.is_set() and not self._ended.is_set():
+            time.sleep(0.05)
+        if self._ended.is_set() and not self._ready.is_set():
+            shutil.rmtree(self.session_dir, ignore_errors=True)  # quedó vacía
+            if self.permiso_faltante:
+                raise CaptureError(MENSAJE_PERMISO, permiso=True)
+            raise CaptureError("No se pudo empezar a grabar: " + self._motivo())
+        # Recién ahora cuenta como «grabando» (así nadie ve «Grabando…» si al final no arrancó).
+        self.recording = True
+        if self._ended.is_set() and not self.died:   # se cayó justo después de arrancar
+            self.died = "se cortó la captura de audio"
 
     def stop(self) -> int:
         if not self.recording:
             return self._enqueued
+        self._stopping = True
         self.recording = False
         if self._proc and self._proc.poll() is None:
             self._proc.terminate()   # SIGTERM -> el helper cierra el último chunk y sale
@@ -126,10 +174,31 @@ class ScreenCaptureRecorder:
             if m:
                 self._on_new_chunk(m.group(1))
                 continue
-            if line:
-                print(f"[sck] {line}")
+            if not line:
+                continue
+            print(f"[sck] {line}")
+            self._log.append(line)
+            if line.startswith("READY"):
+                self._ready.set()
+            if _es_falta_de_permiso(line):
+                self.permiso_faltante = True
         # EOF (el proceso terminó): cerrá el último chunk pendiente.
         self._finalize_current()
+        if self.recording and not self._stopping:
+            # Se cayó en medio de la grabación: app.py lo ve y cierra la sesión con lo grabado hasta acá.
+            self.died = ("macOS le sacó el permiso de grabación a Muesli" if self.permiso_faltante
+                         else "se cortó la captura de audio")
+        self._ended.set()
+
+    def _motivo(self) -> str:
+        """La explicación más útil que dejó el helper (su línea FATAL), sin el prefijo técnico."""
+        for line in reversed(self._log):
+            if line.startswith("FATAL:"):
+                motivo = line[len("FATAL:"):].strip()
+                motivo = re.sub(r"^no se pudo iniciar la captura:\s*", "", motivo, flags=re.I)
+                return motivo[:1].lower() + motivo[1:]
+        code = self._proc.poll() if self._proc else None
+        return f"el grabador se cerró (código {code})." if code is not None else "el grabador no respondió."
 
     def _on_level(self, lvl: float):
         self.level = lvl
@@ -172,6 +241,62 @@ class ScreenCaptureRecorder:
             self.on_chunk(self._enqueued, str(out_path))
         except Exception as e:
             print(f"[sck] on_chunk error: {e}")
+
+
+def _bundle_id():
+    """Identificador de la app empaquetada (com.matiasgentile.muesli); None si corre desde el código."""
+    if not getattr(sys, "frozen", False):
+        return None
+    try:
+        from Foundation import NSBundle
+        return NSBundle.mainBundle().bundleIdentifier()
+    except Exception:
+        return None
+
+
+def pedir_permiso(helper_path=None) -> dict:
+    """Arregla el permiso de grabación de Muesli, para el botón «Dar permiso» del panel.
+
+    1) Borra el permiso viejo de Muesli. macOS lo ata a la versión exacta de la app: después de una
+       actualización, Ajustes puede mostrar a Muesli activado pero macOS ya no lo reconoce, y vuelve
+       a pedirlo cada vez que se graba. Borrándolo, el que se da ahora vale para esta versión.
+    2) Corre el helper un segundo: como no tiene permiso, macOS suma a Muesli a la lista de Ajustes
+       (y muestra su aviso).
+    3) Abre Ajustes del Sistema en esa lista.
+    """
+    bundle = _bundle_id()
+    reseteado = False
+    if bundle:
+        try:
+            r = subprocess.run(["/usr/bin/tccutil", "reset", "ScreenCapture", bundle],
+                               capture_output=True, timeout=10)
+            reseteado = r.returncode == 0
+        except Exception as e:
+            print(f"[permiso] no se pudo borrar el permiso viejo: {e}")
+
+    helper = Path(helper_path or os.getenv("MUESLI_CAPTURE_BIN") or DEFAULT_HELPER)
+
+    def _pedir_y_abrir():
+        tmp = tempfile.mkdtemp(prefix="muesli-permiso-")
+        try:
+            if helper.exists():
+                p = subprocess.Popen([str(helper), "--out-dir", tmp, "--max-seconds", "1"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try:
+                    p.wait(timeout=1.5)   # sin permiso termina enseguida; con permiso graba 1 s
+                except subprocess.TimeoutExpired:
+                    pass
+            subprocess.run(["/usr/bin/open", AJUSTES_PERMISO], check=False)
+            if helper.exists():
+                try:
+                    p.wait(timeout=15)
+                except Exception:
+                    p.kill()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    threading.Thread(target=_pedir_y_abrir, daemon=True).start()
+    return {"ok": True, "reseteado": reseteado, "permiso": PERMISO_NOMBRE}
 
 
 # ---- modo de prueba independiente -----------------------------------------

@@ -21,6 +21,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import rumps
@@ -136,8 +137,16 @@ def api_post(path, payload):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(BASE + path, data=data,
                                  headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        # Los errores de la app vienen como {"error": "..."} con código 400: devolvé ese mensaje
+        # (si no, se vería un «HTTP Error 400» que no le dice nada a nadie).
+        try:
+            return json.loads(e.read().decode())
+        except Exception:
+            raise e
 
 
 def notify(title, text):
@@ -340,7 +349,11 @@ class MuesliBar(rumps.App):
                 notify("Muesli", f"No se pudo iniciar: {e}")
                 return
             if data.get("error"):
+                # No arrancó (casi siempre: falta el permiso de grabación de macOS). El panel explica
+                # qué pasó y, si es el permiso, tiene el botón para darlo: abrilo en vez de solo avisar.
                 notify("Muesli", data["error"])
+                self._set_status("⚠️ No se pudo grabar (tocá para ver)", clickable=True)
+                self.open_panel(None)
                 return
             self.recording = True
             self._t0 = time.time()
@@ -387,7 +400,14 @@ class MuesliBar(rumps.App):
         self._notified = True  # no dispares la notificación de "detenida sola"
         self.record_item.title = "● Grabar"
         self.title = self._idle_title
-        self.status_item.title = "Grabación cancelada"
+        self._set_status("Grabación cancelada")
+
+    def _set_status(self, text, clickable=False):
+        """Renglón de estado del menú. `clickable`: si hubo un problema, tocarlo abre el panel con el detalle."""
+        self.status_item.title = text
+        if clickable != getattr(self, "_status_clickable", False):
+            self.status_item.set_callback(self.open_panel if clickable else None)
+            self._status_clickable = clickable
 
     # ---- panel (ventana nativa con WKWebView, sin navegador ni subprocesos) ----
     def open_panel(self, _):
@@ -741,7 +761,7 @@ class MuesliBar(rumps.App):
         if rec:
             el = int(time.time() - (self._t0 or time.time()))
             self.title = f"● {el // 60:02d}:{el % 60:02d}"
-            self.status_item.title = "Grabando…"
+            self._set_status("Grabando…")
             self._show_float(f"{el // 60:02d}:{el % 60:02d}")
             return
         self._hide_float()  # cualquier estado que no sea grabando: ocultá el flotante
@@ -749,13 +769,13 @@ class MuesliBar(rumps.App):
         if st == "transcribing":
             done = s.get("done_chunks", 0)
             tot = s.get("total_chunks")
-            self.status_item.title = f"Transcribiendo {done}/{tot if tot else '…'}"
+            self._set_status(f"Transcribiendo {done}/{tot if tot else '…'}")
             self.title = "…"
         elif st == "summarizing":
-            self.status_item.title = "Resumiendo con Claude…"
+            self._set_status("Resumiendo con Claude…")
             self.title = "…"
         elif st == "done":
-            self.status_item.title = "✓ Listo y guardado"
+            self._set_status("✓ Listo y guardado")
             self.title = self._idle_title
             if not self._notified:
                 res = s.get("result") or {}
@@ -764,7 +784,7 @@ class MuesliBar(rumps.App):
                 notify("Muesli", f"Resumen listo: {note.get('title', 'tu reunión')}{extra}")
                 self._notified = True
         elif st == "error":
-            self.status_item.title = "⚠️ Error (mirá el panel)"
+            self._set_status("⚠️ Hubo un problema (tocá para ver)", clickable=True)
             self.title = self._idle_title
             if not self._notified:
                 notify("Muesli", s.get("error") or "Falló el procesado")
@@ -773,10 +793,13 @@ class MuesliBar(rumps.App):
             if getattr(self, "_call_prompted", False) and getattr(self, "_call_active", False):
                 # Aviso VISIBLE (no depende del permiso de notificaciones de macOS):
                 # se ve en el menú y con un puntito en el ícono de la barra.
-                self.status_item.title = "🔴 Llamada detectada — tocá ● Grabar"
+                self._set_status("🔴 Llamada detectada — tocá ● Grabar")
                 self.title = "•" if self._has_icon else "🔴"
+            elif s.get("start_problem"):
+                self._set_status("⚠️ No se pudo grabar (tocá para ver)", clickable=True)
+                self.title = self._idle_title
             else:
-                self.status_item.title = "Listo"
+                self._set_status("Listo")
                 self.title = self._idle_title
 
 
