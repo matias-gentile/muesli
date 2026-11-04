@@ -15,6 +15,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+import modelos
+
 BASE_DIR = Path(__file__).parent
 load_dotenv()
 
@@ -38,7 +40,7 @@ NOTES_DIR.mkdir(exist_ok=True)
 # Claves configurables y su valor por defecto (desde .env o hardcodeado).
 _DEFAULTS = {
     "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-    "CLAUDE_MODEL": os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6"),
+    "CLAUDE_MODEL": os.getenv("CLAUDE_MODEL", modelos.POR_DEFECTO),
     "WHISPER_MODEL": os.getenv("WHISPER_MODEL", "base"),
     "WHISPER_VAD": os.getenv("WHISPER_VAD", "0"),
     "AUDIO_DEVICE_NAME": os.getenv("AUDIO_DEVICE_NAME", "Aggregate"),
@@ -83,10 +85,13 @@ if SETTINGS_PATH.exists():
 
 def get(key, default=None):
     v = _overrides.get(key)
-    if v not in (None, ""):
-        return v
-    d = _DEFAULTS.get(key, default)
-    return d if d is not None else default
+    if v in (None, ""):
+        v = _DEFAULTS.get(key, default)
+        if v is None:
+            v = default
+    if key == "CLAUDE_MODEL":
+        v = modelos.actualizar(v)  # quien tenía un modelo de antes pasa al mismo nivel, generación actual
+    return v
 
 
 def get_bool(key):

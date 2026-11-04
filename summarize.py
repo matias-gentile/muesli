@@ -5,12 +5,9 @@ grabación (reunión, clase, entrevista, etc.) para producir un resumen
 estructurado en Markdown, adaptado al contexto. Es el equivalente a las
 "plantillas" de apps como Muesli.
 """
-from anthropic import Anthropic
-
 import datetime as _dt
 
-import config
-import usage
+import claude
 
 BASE_SYSTEM = """Eres un asistente experto en sintetizar lo que ocurre en una \
 grabación de audio transcrita automáticamente. Recibes:
@@ -210,29 +207,12 @@ def summarize(transcript, manual_notes="", title="", context_type=DEFAULT_TYPE, 
     parts.append("\n=== TRANSCRIPCIÓN AUTOMÁTICA ===\n" + (transcript.strip() or "(transcripción vacía)"))
     user_content = "\n".join(parts)
 
-    client = Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
-                       max_retries=4, timeout=180)  # reintenta cortes de red transitorios
     messages = [{"role": "user", "content": user_content}]
-    model = model or config.get("CLAUDE_MODEL")  # permite override por llamada
-    full = ""
-    for _ in range(5):  # si la respuesta se corta por longitud, la continúa
-        message = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=messages,
-        )
-        usage.record_response(model, message, "resumen")
-        part = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
-        full += part
-        if getattr(message, "stop_reason", None) != "max_tokens":
-            break  # terminó normalmente
-        # se cortó por el tope: pedile que siga desde donde quedó
-        messages.append({"role": "assistant", "content": part})
-        messages.append({"role": "user",
-                         "content": "Seguí el resumen exactamente desde donde se cortó, sin "
-                                    "repetir lo ya escrito ni reabrir secciones ya cerradas."})
-    return full.strip()
+    # Si la respuesta se corta por longitud, claude.completar le pide que siga desde donde quedó.
+    return claude.completar(system, messages, largo=max_tokens, tipo="resumen", esfuerzo="medium",
+                            model=model,
+                            seguir="Seguí el resumen exactamente desde donde se cortó, sin "
+                                   "repetir lo ya escrito ni reabrir secciones ya cerradas.")
 
 
 _WEEKLY_SYSTEM = """Sos un asistente que sintetiza la semana de trabajo de una persona \
@@ -293,23 +273,9 @@ def weekly_digest(notes, detail="normal", model=None):
         system += ("\n\nNIVEL DE DETALLE: EXTENSO. Desarrollá cada sección con más profundidad "
                    "y matices, sin perder la estructura.")
 
-    client = Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
-                       max_retries=4, timeout=180)
     messages = [{"role": "user", "content": user_content}]
-    model = model or config.get("CLAUDE_MODEL")
-    full = ""
-    for _ in range(5):  # continúa si se corta por longitud
-        message = client.messages.create(
-            model=model, max_tokens=max_tokens, system=system, messages=messages)
-        usage.record_response(model, message, "semanal")
-        part = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
-        full += part
-        if getattr(message, "stop_reason", None) != "max_tokens":
-            break
-        messages.append({"role": "assistant", "content": part})
-        messages.append({"role": "user",
-                         "content": "Seguí exactamente desde donde se cortó, sin repetir lo ya escrito."})
-    return full.strip()
+    return claude.completar(system, messages, largo=max_tokens, tipo="semanal", esfuerzo="medium",
+                            model=model)
 
 
 if __name__ == "__main__":

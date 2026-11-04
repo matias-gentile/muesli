@@ -7,18 +7,11 @@ from __future__ import annotations
 
 import re
 
-import config
-import usage
-from anthropic import Anthropic
+import claude
 
 # Tope de caracteres del material que mandamos como contexto (evita prompts gigantes en
 # reuniones muy largas). ~48k chars ≈ bastante contexto sin pasarnos.
 _MAX_CONTEXT_CHARS = 48000
-
-
-def _client() -> Anthropic:
-    return Anthropic(api_key=config.get("ANTHROPIC_API_KEY") or None,
-                     max_retries=4, timeout=120)
 
 
 def _note_context(note: dict) -> str:
@@ -39,28 +32,11 @@ def _note_context(note: dict) -> str:
 
 
 def _complete(system: str, messages: list, max_tokens: int = 1200) -> str:
-    """Llama a Claude con continuación si la respuesta se corta por longitud."""
-    client = _client()
-    full = ""
-    msgs = list(messages)
-    model = config.get("CLAUDE_MODEL")
-    for _ in range(4):
-        m = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=msgs,
-        )
-        usage.record_response(model, m, "asistente")
-        part = "".join(b.text for b in m.content if getattr(b, "type", None) == "text")
-        full += part
-        if getattr(m, "stop_reason", None) != "max_tokens":
-            break
-        msgs = msgs + [
-            {"role": "assistant", "content": part},
-            {"role": "user", "content": "Seguí exactamente desde donde cortaste, sin repetir."},
-        ]
-    return full.strip()
+    """Llama a Claude (con continuación si la respuesta se corta por longitud). Son tareas chicas
+    sobre una sola nota: con poco razonamiento alcanza y contesta más rápido."""
+    return claude.completar(system, messages, largo=max_tokens, tipo="asistente", esfuerzo="low",
+                            vueltas=4, timeout=120,
+                            seguir="Seguí exactamente desde donde cortaste, sin repetir.")
 
 
 def ask(note: dict, question: str, history: list | None = None) -> str:
