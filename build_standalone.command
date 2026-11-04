@@ -1,9 +1,10 @@
 #!/bin/bash
-# Construye Muesli como .app STANDALONE (con Python + dependencias + helper adentro).
+# Construye Muesli como .app STANDALONE (con Python + dependencias + helper adentro) desde el código de esta carpeta
+# y la deja en el Escritorio. Para instalar la versión publicada no hace falta: usá instalar.sh (ver README).
 # Doble clic para correr; no necesita venv ni "python menubar.py".
 #
-# Requisitos: macOS 13+, herramientas de Xcode (swiftc) y tu venv con las dependencias
-# ya instaladas (las mismas que usás para correr la app).
+# Requisitos: macOS 14+, herramientas de Xcode con el SDK de macOS 15 o más nuevo (swiftc) y tu venv con las
+# dependencias ya instaladas (las mismas que usás para correr la app).
 set -e
 cd "$(dirname "$0")"
 echo "════════════════════════════════════════════"
@@ -15,52 +16,23 @@ PY="python3"
 [ -x ".venv/bin/python" ] && PY=".venv/bin/python"
 echo "Python: $PY"
 
-# 1) Compilar el helper de captura (Swift) para que quede dentro del bundle.
+# Asegurar PyInstaller (con pip si el venv lo tiene; si es un venv de uv, con uv).
 echo ""
-echo "1/4 · Compilando el helper de captura (ScreenCaptureKit)…"
-( cd native && ./build.sh )
-
-# 1.5) Regenerar el ícono .icns de forma NATIVA (iconutil), más confiable que el de Python.
-if [ -f assets/icon.png ]; then
-  echo ""
-  echo "1.5 · Regenerando icono .icns nativo (iconutil)…"
-  ICONSET="$(mktemp -d)/icon.iconset"
-  mkdir -p "$ICONSET"
-  for s in 16 32 128 256 512; do
-    sips -z $s $s assets/icon.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null 2>&1
-    d=$((s * 2))
-    sips -z $d $d assets/icon.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null 2>&1
-  done
-  if iconutil -c icns "$ICONSET" -o assets/icon.icns 2>/dev/null; then
-    echo "   ✓ assets/icon.icns regenerado de forma nativa"
-  else
-    echo "   (iconutil falló; uso el icon.icns que ya estaba)"
-  fi
-fi
-
-# 2) Asegurar PyInstaller.
-echo ""
-echo "2/4 · Asegurando PyInstaller…"
-$PY -m pip install --quiet --upgrade pyinstaller
-
-# 3) Empaquetar.
-echo ""
-echo "3/4 · Empaquetando con PyInstaller (puede tardar)…"
-rm -rf build dist
-$PY -m PyInstaller --noconfirm muesli.spec
-
-APP="dist/Muesli.app"
-if [ ! -d "$APP" ]; then
-  echo "✗ No se generó $APP. Mirá los errores de PyInstaller arriba."
+echo "Asegurando PyInstaller…"
+if "$PY" -m pip --version >/dev/null 2>&1; then
+  "$PY" -m pip install --quiet --upgrade "pyinstaller>=6.10,<7"
+elif command -v uv >/dev/null 2>&1; then
+  uv pip install --quiet --python "$PY" "pyinstaller>=6.10,<7"
+else
+  echo "✗ No encuentro pip ni uv para instalar PyInstaller en $PY."
   exit 1
 fi
 
-# 4) Firmar ad-hoc + copiar al Escritorio.
+# Armar (lo mismo que hace GitHub al publicar una versión).
 echo ""
-echo "4/4 · Firmando (ad-hoc) y copiando al Escritorio…"
-codesign --force --deep --sign - "$APP" 2>/dev/null || \
-  echo "   (codesign ad-hoc falló; vas a poder abrir igual con botón derecho → Abrir)"
+PY="$PY" ./build_release.sh "0.0.0"
 
+APP="dist/Muesli.app"
 DEST="$HOME/Desktop/Muesli.app"
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
@@ -73,7 +45,7 @@ echo ""
 echo "✓ Listo:  $DEST"
 echo ""
 echo "Primera vez:"
-echo "  • Abrilo con botón derecho → Abrir (Gatekeeper, por no estar notarizada)."
+echo "  • Abrila con doble clic (si macOS la frena, botón derecho → Abrir)."
 echo "  • Concedé permisos: Grabación de pantalla y Micrófono (Ajustes → Privacidad)."
 echo "  • El ícono 🎙️ aparece en la barra de menú (es app de barra, sin Dock)."
 echo "  • La primera transcripción baja el modelo de Whisper (necesita internet una vez)."

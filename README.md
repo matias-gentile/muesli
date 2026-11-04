@@ -5,6 +5,34 @@ con Whisper y genera un **resumen estructurado** con la API de Claude, adaptado
 al **tipo** de grabación (reunión, clase, entrevista, podcast…). Tus notas
 manuales guían el énfasis. Todo se guarda como Markdown.
 
+## Instalar en una Mac
+
+Abrí la app **Terminal** y pegá:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/matias-gentile/muesli/main/instalar.sh | bash
+```
+
+Baja la última versión publicada (elige sola la de chip Apple o la de Intel), la deja en
+**Aplicaciones** y la abre. Se abre el panel con una lista de lo que falta configurar: la
+**API key de Claude** y, si querés juntar las notas de todas tus Macs, el **server de casa**
+(ver [Server de casa](#server-de-casa-memoria-opcional)). Para **actualizar**, se pega el
+mismo comando: tus notas y tu configuración no se tocan.
+
+- Necesita **macOS 14 (Sonoma)** o más nuevo. No hace falta Python ni Xcode.
+- La primera vez que grabes, macOS pide **Grabación de pantalla** y **Micrófono**. Después
+  de cada actualización puede volver a pedirlos: la app no está firmada con una cuenta de
+  Apple, así que cada versión nueva cuenta como otra app para macOS.
+- **Sin Terminal:** bajá `Muesli-Mac-chip-Apple.zip` o `Muesli-Mac-Intel.zip` de
+  [Releases](https://github.com/matias-gentile/muesli/releases/latest) (en menú Apple →
+  Acerca de esta Mac dice qué chip tiene), descomprimilo y mové `Muesli.app` a Aplicaciones. Como no
+  viene del App Store, la primera vez macOS la frena: andá a **Ajustes del Sistema →
+  Privacidad y seguridad**, bajá hasta el aviso de Muesli y tocá **Abrir igualmente**.
+
+Las versiones las arma GitHub solo (`.github/workflows/armar.yml`) cuando se sube un tag:
+`git tag v1.2.0 && git push origin v1.2.0`. El resto de este README es para correr Muesli
+desde el código.
+
 ## Cómo funciona
 
 ```
@@ -38,11 +66,11 @@ que agregar una nueva es trivial.
 
 ## Requisitos previos
 
-- macOS 13 (Ventura) o posterior — la captura usa ScreenCaptureKit. Para sumar tu
+- macOS 14 (Sonoma) o posterior — la captura usa ScreenCaptureKit. Para sumar tu
   **micrófono** conviene macOS 14.4+ (en Apple Silicon anda mejor).
 - Python 3.9+ — comprobá con `python3 --version`
-- Herramientas de línea de comandos de Xcode (para compilar el helper de captura):
-  `xcode-select --install`
+- Herramientas de línea de comandos de Xcode con el SDK de macOS 15 o más nuevo (para
+  compilar el helper de captura): `xcode-select --install`
 - Una API key de Anthropic — https://console.anthropic.com
 
 ---
@@ -232,7 +260,10 @@ reunión, usá el panel.
 
 Hay **dos formas** de tener un `Muesli.app`:
 
-### A) App standalone (recomendada) — `build_standalone.command`
+### A) App standalone — `build_standalone.command`
+Para instalar la versión publicada no hace falta: usá el comando de
+[Instalar en una Mac](#instalar-en-una-mac). Esto arma la app desde **tu copia del código**.
+
 Un `.app` **autocontenido**: trae Python, todas las dependencias y el helper de captura
 adentro. Funciona con **doble clic, sin venv ni `python menubar.py`**, y usa
 **ScreenCaptureKit por defecto** (audio del sistema + micrófono, **sin BlackHole ni Audio
@@ -241,9 +272,9 @@ MIDI**). Es la versión "producto".
 ```bash
 ./build_standalone.command
 ```
-Esto compila el helper, empaqueta con **PyInstaller** y deja `Muesli.app` en tu Escritorio.
-Requisitos: macOS 13+, herramientas de Xcode (`xcode-select --install`) y tu venv con las
-dependencias instaladas. Notas:
+Esto compila el helper, empaqueta con **PyInstaller** (vía `build_release.sh`, lo mismo
+que usa GitHub) y deja `Muesli.app` en tu Escritorio. Requisitos: macOS 14+, herramientas
+de Xcode con el SDK de macOS 15 o más nuevo y tu venv con las dependencias instaladas. Notas:
 - **Primera vez:** abrilo con **botón derecho → Abrir** (Gatekeeper, porque no está
   notarizada). Concedé **Grabación de pantalla** y **Micrófono** (Ajustes → Privacidad).
 - La **primera transcripción** baja el modelo de Whisper (necesita internet una vez).
