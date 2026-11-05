@@ -39,6 +39,7 @@ class Session:
         self.peak = 1.0
         self.result = None
         self.error = None
+        self.recuperable = False   # falló al procesar pero el audio quedó: se puede «Recuperar»
         self.title = ""
         self.manual_notes = ""
         self.context_type = "reunion"
@@ -85,6 +86,7 @@ class Session:
                 "total_chunks": self.total_chunks,
                 "result": self.result,
                 "error": self.error,
+                "recuperable": self.recuperable,
             }
 
     def live_state(self):
@@ -189,4 +191,7 @@ class Session:
                               "notion_error": notion_error, "summary_error": summary_error},
                       status="done")
         except Exception as e:
-            self._set(status="error", error=f"fallo procesando: {e}")
+            print(f"[sesión] falló al procesar: {e!r}")
+            self._set(status="error", recuperable=True, error=(
+                f"Algo falló al procesar la grabación ({e}). El audio quedó guardado: "
+                "tocá «Recuperar» para volver a intentarlo."))
