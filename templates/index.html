@@ -1082,7 +1082,7 @@ async function pollStatus(keepComposer = false) {
     statusLoop = false;
     finishStop();
     setStatus("");
-    showProblemCard(s.error);
+    showProblemCard(s.error, s.recuperable);
     return;
   } else if (s.status === "idle" || s.status === "cancelled") {
     statusLoop = false;   // no hay nada procesándose
@@ -1123,7 +1123,7 @@ async function syncWithServer() {
   // es lo que hay que arreglar para poder grabar.
   const msg = (prob && !prob.permiso) ? prob.message : (s.status === "error" ? s.error : null);
   if (prob && prob.permiso) showProblemCard("permiso");
-  else if (msg && msg !== problemDismissed) showProblemCard(msg);
+  else if (msg && msg !== problemDismissed) showProblemCard(msg, !prob && s.recuperable);
   else if (problemShown === "permiso") hideProblemCard();   // ya grabó bien en otro lado
   if (!firstLook && doneId && doneId !== lastDoneNote) {
     lastDoneNote = doneId;
@@ -1134,12 +1134,12 @@ async function syncWithServer() {
 
 // ---- Tarjeta de arriba: qué salió mal y qué hacer ----
 // `what` = "permiso" (falta el permiso de grabación de macOS: pasos + botón) o el texto de un error.
-function showProblemCard(what) {
+function showProblemCard(what, recuperable) {
   const b = document.getElementById("problemCard");
   if (!b) return;
   if (problemShown === what && b.style.display !== "none") return;   // ya está: no pises lo que dice
   problemShown = what;
-  b.innerHTML = what === "permiso" ? permisoHtml() : errorHtml(what);
+  b.innerHTML = what === "permiso" ? permisoHtml() : errorHtml(what, recuperable);
   b.style.display = "";
   b.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
@@ -1155,7 +1155,7 @@ function dismissProblem() {
   hideProblemCard();
 }
 
-function errorHtml(msg) {
+function errorHtml(msg, recuperable) {
   const PREFIJO = "No se pudo empezar a grabar: ";
   const alEmpezar = msg.startsWith(PREFIJO);
   let detalle = alEmpezar ? msg.slice(PREFIJO.length) : msg;
@@ -1164,7 +1164,22 @@ function errorHtml(msg) {
   return `
     <button class="banner-x" onclick="dismissProblem()" title="Cerrar">✕</button>
     <div class="setup-title">⚠️ ${titulo}</div>
-    <div class="perm-why" style="margin-bottom:0">${escHtml(detalle)}</div>`;
+    <div class="perm-why" style="margin-bottom:0">${escHtml(detalle)}</div>${recuperable ? `
+    <div class="setup-actions"><button class="regen-btn" onclick="recoverLatest(this)">Recuperar</button></div>` : ""}`;
+}
+
+// «Recuperar» de la tarjeta: vuelve a procesar el audio de la última grabación que no llegó a guardarse.
+async function recoverLatest(btn) {
+  let items = [];
+  try { items = await (await fetch("/api/recoverable")).json(); } catch (e) {}
+  const last = items[items.length - 1];
+  if (!last) {
+    btn.disabled = true;
+    btn.textContent = "No encontré el audio";
+    return;
+  }
+  hideProblemCard();
+  recoverFolder(last.folder, prettyFolder(last.name));
 }
 
 function permisoHtml() {
@@ -2049,8 +2064,8 @@ async function loadRecoverable() {
 
 async function recoverFolder(folder, label) {
   let title = "";
-  try { title = prompt("Nombre para la reunión recuperada:", "Reunión " + label) || ""; }
-  catch (e) {}
+  try { title = prompt("Nombre para la reunión recuperada:", "Reunión " + label); }
+  catch (e) { title = ""; }
   if (title === null) return;  // canceló
   setStatus("Recuperando grabación… (re-transcribe el audio, puede tardar)", true);
   document.getElementById("recBtn").disabled = true;

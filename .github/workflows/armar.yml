@@ -43,6 +43,20 @@ jobs:
           uv venv .venv --python 3.12 --python-preference only-managed
           uv pip install --python .venv/bin/python -r requirements.txt "pyinstaller>=6.10,<7"
 
+      - name: Probar que se puede leer el audio grabado
+        # Así se lee cada pedazo de grabación antes de transcribirlo. Si una versión nueva de un paquete lo
+        # rompe (pasó con PyAV 19), falla acá en vez de salir una versión que no transcribe nada.
+        run: |
+          .venv/bin/python -c "
+          import numpy as np, soundfile as sf, tempfile, os
+          from faster_whisper.audio import decode_audio
+          p = os.path.join(tempfile.mkdtemp(), 'prueba.wav')
+          sf.write(p, np.zeros((48000, 2), dtype='float32'), 48000)
+          a = decode_audio(p)
+          assert a.shape == (16000,), a.shape
+          print('audio OK', a.shape)
+          "
+
       - name: Armar
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.0"; fi

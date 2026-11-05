@@ -1,5 +1,6 @@
 anthropic>=2.4,<3   # modelos 5.5: esfuerzo (output_config) y reintento en otro modelo (fallbacks)
 faster-whisper>=1.0.0
+av>=11,<19   # faster-whisper (1.2.1) abre el audio con una opción que PyAV 19 sacó: con 19 no transcribe nada
 sounddevice>=0.4.6
 soundfile>=0.12.1
 numpy>=1.24
